@@ -16,6 +16,15 @@ dotenv.config();
 process.env.NODE_ENV = process.env.NODE_ENV || 'development';
 console.log(`Запуск в режиме: ${process.env.NODE_ENV}`);
 
+// Устанавливаем URL для мини-приложения, если не задан
+if (!process.env.WEB_APP_URL) {
+  // Для локальной разработки используем localhost, для продакшена домен приложения
+  process.env.WEB_APP_URL = process.env.NODE_ENV === 'production' 
+    ? 'https://papatrubok.onrender.com'
+    : 'http://localhost:3000';
+  console.log(`WEB_APP_URL установлен как: ${process.env.WEB_APP_URL}`);
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -81,6 +90,94 @@ bot.command('start', async (ctx) => {
   } catch (error) {
     console.error('Ошибка при обработке команды start:', error);
     ctx.reply('Произошла ошибка. Пожалуйста, попробуйте снова ввести /start');
+  }
+});
+
+// Обработчик для callback кнопок
+bot.on('callback_query', async (ctx) => {
+  try {
+    const callbackData = ctx.callbackQuery.data;
+    console.log('Получен callback:', callbackData);
+    
+    // Кнопка старта
+    if (callbackData === 'start_game') {
+      // Получаем URL приложения для веб-приложения
+      const webAppUrl = process.env.WEB_APP_URL || 'https://t.me/PapaTrubokBot/app';
+      
+      await ctx.answerCbQuery('Загружаем игру...');
+      await ctx.reply(
+        createStyledMessage('ЗАПУСК ИГРЫ', 'Нажмите кнопку ниже, чтобы открыть мини-приложение PapaTrubok.', '🚀'),
+        {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🎮 Играть в PapaTrubok', web_app: { url: webAppUrl } }]
+            ]
+          }
+        }
+      );
+    }
+    // Кнопка начала голосования из уведомления о присоединении игрока
+    else if (callbackData.startsWith('start_game_now_')) {
+      const gameId = callbackData.replace('start_game_now_', '');
+      const games = gameManager.getGames();
+      const game = games[gameId];
+      
+      if (!game) {
+        await ctx.answerCbQuery('Ошибка: игра не найдена');
+        return;
+      }
+      
+      if (game.initiator != ctx.from.id.toString()) {
+        await ctx.answerCbQuery('Только создатель игры может начать голосование');
+        return;
+      }
+      
+      const answersCount = Object.keys(game.answers || {}).length;
+      if (answersCount < 2) {
+        await ctx.answerCbQuery('Нужно минимум 2 ответа для голосования');
+        return;
+      }
+      
+      game.status = 'voting';
+      gameManager.setGame(gameId, game);
+      
+      // Получаем URL приложения для кнопки
+      const webAppUrl = process.env.WEB_APP_URL || 'https://t.me/PapaTrubokBot/app';
+      
+      // Уведомляем участников о начале голосования
+      if (Array.isArray(game.participants)) {
+        game.participants.forEach(participantId => {
+          try {
+            // Проверяем ID участника перед отправкой уведомления
+            if (participantId && typeof participantId === 'string' && participantId.length > 0) {
+              bot.telegram.sendMessage(
+                participantId,
+                `🎯 Голосование началось!\n\nСоздатель игры начал голосование по вопросу:\n"${game.currentQuestion}"\n\nОткройте мини-приложение, чтобы проголосовать!`,
+                {
+                  parse_mode: 'HTML',
+                  reply_markup: {
+                    inline_keyboard: [
+                      [{ text: 'Открыть голосование', web_app: { url: webAppUrl } }]
+                    ]
+                  }
+                }
+              ).catch(error => {
+                console.warn(`Не удалось отправить уведомление участнику ${participantId}:`, error.message);
+              });
+            }
+          } catch (e) {
+            console.error(`Не удалось отправить уведомление участнику ${participantId}:`, e);
+          }
+        });
+      }
+      
+      await ctx.answerCbQuery('Голосование успешно запущено!');
+      await ctx.reply('🎯 Голосование успешно запущено! Все участники получили уведомления.');
+    }
+  } catch (error) {
+    console.error('Ошибка при обработке callback_query:', error);
+    ctx.answerCbQuery('Произошла ошибка. Пожалуйста, попробуйте снова.');
   }
 });
 
@@ -290,6 +387,9 @@ app.post('/api/games/:gameId/answer', (req, res) => {
         try {
           // Проверяем ID участника перед отправкой уведомления
           if (participantId && typeof participantId === 'string' && participantId.length > 0) {
+            // Получаем URL приложения для кнопки
+            const webAppUrl = process.env.WEB_APP_URL || 'https://t.me/PapaTrubokBot/app';
+            
             bot.telegram.sendMessage(
               participantId,
               `🎯 Голосование началось!\n\nУже набралось 10 ответов на вопрос:\n"${game.currentQuestion}"\n\nОткройте мини-приложение, чтобы проголосовать!`,
@@ -297,7 +397,7 @@ app.post('/api/games/:gameId/answer', (req, res) => {
                 parse_mode: 'HTML',
                 reply_markup: {
                   inline_keyboard: [
-                    [{ text: 'Открыть голосование', web_app: { url: 'https://ваш-домен.com' } }]
+                    [{ text: 'Открыть голосование', web_app: { url: webAppUrl } }]
                   ]
                 }
               }
@@ -357,6 +457,9 @@ app.post('/api/games/:gameId/startVoting', (req, res) => {
       try {
         // Проверяем ID участника перед отправкой уведомления
         if (participantId && typeof participantId === 'string' && participantId.length > 0) {
+          // Получаем URL для веб-приложения
+          const webAppUrl = process.env.WEB_APP_URL || 'https://t.me/PapaTrubokBot/app';
+          
           bot.telegram.sendMessage(
             participantId,
             `🎯 Голосование началось!\n\nСоздатель игры начал голосование по вопросу:\n"${game.currentQuestion}"\n\nОткройте мини-приложение, чтобы проголосовать!`,
@@ -364,7 +467,7 @@ app.post('/api/games/:gameId/startVoting', (req, res) => {
               parse_mode: 'HTML',
               reply_markup: {
                 inline_keyboard: [
-                  [{ text: 'Открыть голосование', web_app: { url: 'https://ваш-домен.com' } }]
+                  [{ text: 'Открыть голосование', web_app: { url: webAppUrl } }]
                 ]
               }
             }
@@ -553,6 +656,9 @@ function notifyAboutResults(gameId) {
   
   resultText += '\nСпасибо всем за участие! 👏';
   
+  // Получаем URL приложения для кнопки
+  const webAppUrl = process.env.WEB_APP_URL || 'https://t.me/PapaTrubokBot/app';
+  
   // Отправляем уведомление всем участникам
   if (Array.isArray(game.participants)) {
     game.participants.forEach(participantId => {
@@ -566,7 +672,7 @@ function notifyAboutResults(gameId) {
               parse_mode: 'HTML',
               reply_markup: {
                 inline_keyboard: [
-                  [{ text: 'Посмотреть подробности', web_app: { url: 'https://ваш-домен.com' } }]
+                  [{ text: 'Посмотреть подробности', web_app: { url: webAppUrl } }]
                 ]
               }
             }

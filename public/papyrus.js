@@ -3,29 +3,49 @@ const API_URL = window.location.origin + '/api';
 
 console.log("papyrus.js загружен");
 
-// Переопределяем Telegram WebApp объект для предотвращения ошибок
-window.Telegram = {
-  WebApp: {
-    initDataUnsafe: {
-      user: {
-        id: Math.floor(Math.random() * 1000000),
-        first_name: '',
-      }
-    },
-    BackButton: {
-      onClick: function(callback) {
-        console.log('BackButton.onClick зарегистрирован');
-      }
+// Правильное определение объекта Telegram WebApp
+// Если мы внутри Telegram WebApp, используем его объект, иначе создаем заглушку
+if (!window.Telegram || !window.Telegram.WebApp) {
+  console.log("Telegram WebApp не обнаружен, создаем заглушку для локального тестирования");
+  window.Telegram = {
+    WebApp: {
+      initDataUnsafe: {
+        user: {
+          id: Math.floor(Math.random() * 1000000),
+          first_name: '',
+        }
+      },
+      BackButton: {
+        show: function() { console.log('BackButton.show вызван'); },
+        hide: function() { console.log('BackButton.hide вызван'); },
+        onClick: function(callback) { console.log('BackButton.onClick зарегистрирован'); },
+        offClick: function(callback) { console.log('BackButton.offClick вызван'); },
+        isVisible: false
+      },
+      ready: function() { console.log('WebApp.ready вызван'); },
+      expand: function() { console.log('WebApp.expand вызван'); },
+      close: function() { console.log('WebApp.close вызван'); }
     }
-  }
-};
+  };
+} else {
+  console.log("Telegram WebApp обнаружен, используем встроенные функции");
+}
 
 // Глобальные переменные
 let currentUser = {
-  id: Math.floor(Math.random() * 1000000),
+  id: getTelegramUserId(),
   name: ''
 };
 let currentGame = null;
+let navigationHistory = []; // История навигации для кнопки "Назад"
+
+// Использование Telegram ID пользователя
+function getTelegramUserId() {
+  if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
+    return window.Telegram.WebApp.initDataUnsafe.user.id || Math.floor(Math.random() * 1000000);
+  }
+  return Math.floor(Math.random() * 1000000);
+}
 
 // Функция для показа красивых уведомлений
 function showNotification(message, type = 'info') {
@@ -63,20 +83,29 @@ function showNotification(message, type = 'info') {
   }, 5000);
 }
 
-// Простые функции для базовой работы
+// Функция для показа экранов с отслеживанием истории
 function showScreen(screenId) {
-  // Получаем все экраны
+  // Получаем текущий экран
+  let currentScreenId = null;
   const screens = [
     'startScreen', 'nameScreen', 'gameScreen', 'questionScreen',
     'answerScreen', 'votingScreen', 'resultsScreen'
   ];
   
-  console.log(`Показываем экран: ${screenId}`);
+  for (const id of screens) {
+    const screen = document.getElementById(id);
+    if (screen && screen.style.display === 'block') {
+      currentScreenId = id;
+      break;
+    }
+  }
   
-  // Скрываем дебаг-панель при переключении экранов
-  const debugPanel = document.getElementById('debugPanel');
-  if (debugPanel && debugPanel.style.display === 'block') {
-    debugPanel.style.display = 'none';
+  console.log(`Показываем экран: ${screenId} (предыдущий: ${currentScreenId})`);
+  
+  // Сохраняем текущий экран в историю, если переходим на новый экран
+  if (currentScreenId && currentScreenId !== screenId) {
+    navigationHistory.push(currentScreenId);
+    console.log(`История навигации: ${navigationHistory.join(' -> ')}`);
   }
   
   // Скрываем все экраны
@@ -91,6 +120,17 @@ function showScreen(screenId) {
   const screenToShow = document.getElementById(screenId);
   if (screenToShow) {
     screenToShow.style.display = 'block';
+    
+    // Управление кнопкой "Назад" в Telegram
+    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.BackButton) {
+      if (navigationHistory.length > 0 && screenId !== 'startScreen') {
+        // Показываем кнопку назад, если есть история и не на начальном экране
+        window.Telegram.WebApp.BackButton.show();
+      } else {
+        // Скрываем кнопку назад на начальном экране
+        window.Telegram.WebApp.BackButton.hide();
+      }
+    }
     
     // Фокус на поля ввода
     if (screenId === 'nameScreen') {
@@ -108,14 +148,50 @@ function showScreen(screenId) {
   }
 }
 
+// Функция возврата назад
+function goBack() {
+  if (navigationHistory.length > 0) {
+    const previousScreen = navigationHistory.pop();
+    console.log(`Возвращаемся к экрану: ${previousScreen}`);
+    
+    // Показываем предыдущий экран без добавления в историю
+    const screens = [
+      'startScreen', 'nameScreen', 'gameScreen', 'questionScreen',
+      'answerScreen', 'votingScreen', 'resultsScreen'
+    ];
+    
+    screens.forEach(id => {
+      const screen = document.getElementById(id);
+      if (screen) {
+        screen.style.display = id === previousScreen ? 'block' : 'none';
+      }
+    });
+    
+    // Управление кнопкой "Назад" в Telegram
+    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.BackButton) {
+      if (navigationHistory.length > 0 && previousScreen !== 'startScreen') {
+        window.Telegram.WebApp.BackButton.show();
+      } else {
+        window.Telegram.WebApp.BackButton.hide();
+      }
+    }
+  } else {
+    // Если истории нет, возвращаемся на начальный экран
+    showScreen('startScreen');
+  }
+}
+
 // Обработчик для начала приложения
 window.startApp = function() {
   console.log("Вызвана функция startApp()");
   
-  // Скрываем дебаг-панель, если она открыта
-  const debugPanel = document.getElementById('debugPanel');
-  if (debugPanel) {
-    debugPanel.style.display = 'none';
+  // Инициализация WebApp
+  if (window.Telegram && window.Telegram.WebApp) {
+    window.Telegram.WebApp.ready();
+    window.Telegram.WebApp.expand();
+    
+    // Настраиваем обработчик кнопки "Назад"
+    window.Telegram.WebApp.BackButton.onClick(goBack);
   }
   
   showScreen('nameScreen');
@@ -556,31 +632,6 @@ async function startVoting() {
   }
 }
 
-// Обработчик для возврата назад
-function goBack() {
-  console.log("Вызвана функция goBack()");
-  
-  // В зависимости от текущего экрана определяем куда вернуться
-  const currentScreen = document.querySelector('div[style="display: block;"');
-  if (!currentScreen) {
-    showScreen('startScreen');
-    return;
-  }
-  
-  switch (currentScreen.id) {
-    case 'nameScreen':
-      showScreen('startScreen');
-      break;
-    case 'questionScreen':
-    case 'answerScreen':
-    case 'votingScreen':
-      showScreen('gameScreen');
-      break;
-    default:
-      showScreen('startScreen');
-  }
-}
-
 // Периодически проверяем статус игры
 let statusCheckInterval = null;
 
@@ -596,39 +647,50 @@ function startStatusCheck() {
   }, 5000); // Проверка каждые 5 секунд
 }
 
-// Проверка статуса игры
+// Улучшенная функция проверки статуса игры
 async function checkGameStatus() {
-  if (!currentGame || !currentGame.id) return;
+  if (!currentGame || !currentGame.id) {
+    console.error('Нет активной игры для проверки статуса');
+    return;
+  }
   
   try {
-    const response = await fetch(`${API_URL}/games/${currentGame.id}`);
-    if (!response.ok) return;
+    const response = await fetch(`${API_URL}/games/${currentGame.id}?_=${Date.now()}`);
     
-    const game = await response.json();
+    if (!response.ok) {
+      console.warn(`Ошибка при проверке статуса игры: ${response.status} ${response.statusText}`);
+      return;
+    }
     
-    // Обновляем статус игры
-    if (game.status !== currentGame.status) {
-      currentGame.status = game.status;
-      
-      // Реагируем на изменение статуса
-      if (game.status === 'voting') {
-        alert('Началось голосование!');
-        loadVotingOptions();
-      } else if (game.status === 'results') {
-        alert('Голосование завершено! Загружаем результаты...');
-        loadResults();
-      }
+    const gameData = await response.json();
+    
+    // Обновляем локальный статус игры
+    currentGame.status = gameData.status;
+    
+    console.log(`Статус игры ${currentGame.id}: ${gameData.status}`);
+    
+    // Реагируем на изменение статуса
+    if (gameData.status === 'voting' && document.getElementById('answerScreen').style.display === 'block') {
+      showNotification('Началось голосование! Переходим к выбору лучших ответов.', 'info');
+      loadVotingOptions();
+    } else if (gameData.status === 'results' && document.getElementById('votingScreen').style.display === 'block') {
+      showNotification('Голосование завершено! Переходим к результатам.', 'success');
+      loadResults();
     }
   } catch (error) {
-    // Скрываем периодические ошибки проверки статуса
-    // console.error('Ошибка при проверке статуса игры:', error);
+    console.error('Ошибка при проверке статуса игры:', error);
+    
+    // Дополнительно проверяем сетевое соединение
+    if (!navigator.onLine) {
+      showNotification('Отсутствует подключение к интернету. Проверьте ваше соединение.', 'error');
+    }
   }
 }
 
 // Загрузка вариантов для голосования
 async function loadVotingOptions() {
   if (!currentGame || !currentGame.id) {
-    console.error('Нет информации о текущей игре');
+    console.error('Нет активной игры для загрузки вариантов голосования');
     return;
   }
   
@@ -636,56 +698,50 @@ async function loadVotingOptions() {
     const response = await fetch(`${API_URL}/games/${currentGame.id}/answers?userId=${currentUser.id}`);
     
     if (!response.ok) {
-      throw new Error(`Ошибка HTTP: ${response.status}`);
+      showNotification('Не удалось загрузить варианты для голосования. Попробуйте позже.', 'error');
+      return;
     }
     
     const data = await response.json();
     
-    if (data.answers && data.answers.length > 0) {
-      const votingQuestionText = document.getElementById('votingQuestionText');
-      if (votingQuestionText) {
-        votingQuestionText.textContent = data.question;
-      }
-      
-      const answerOptions = document.getElementById('answerOptions');
-      if (!answerOptions) {
-        console.error('Элемент для вариантов ответов не найден');
-        return;
-      }
-      
-      // Очищаем старые варианты
+    // Обновляем текст вопроса
+    const questionText = document.getElementById('votingQuestionText');
+    if (questionText) questionText.textContent = data.question;
+    
+    // Заполняем список вариантов
+    const answerOptions = document.getElementById('answerOptions');
+    if (answerOptions) {
       answerOptions.innerHTML = '';
-      selectedAnswers = []; // Сбрасываем выбранные ответы
       
-      // Добавляем новые варианты
-      data.answers.forEach(answer => {
-        const answerOption = document.createElement('div');
-        answerOption.className = 'answer-option';
-        answerOption.setAttribute('data-id', answer.id);
-        answerOption.innerHTML = `
-          <strong>${answer.username}:</strong> ${answer.text}
+      // Перемешиваем варианты ответов для честного голосования
+      const shuffledAnswers = [...data.answers].sort(() => Math.random() - 0.5);
+      
+      shuffledAnswers.forEach(answer => {
+        const option = document.createElement('div');
+        option.className = 'answer-option';
+        option.dataset.id = answer.id;
+        option.innerHTML = `
+          <div class="answer-text">${answer.text}</div>
+          <div class="answer-username">${answer.username}</div>
         `;
-        answerOption.addEventListener('click', function() {
+        option.onclick = function() {
           toggleVoteSelection(this);
-        });
-        
-        answerOptions.appendChild(answerOption);
+        };
+        answerOptions.appendChild(option);
       });
-      
-      const votingStatus = document.getElementById('votingStatus');
-      if (votingStatus) {
-        votingStatus.textContent = 'Выберите 2 самых смешных ответа (кроме своего)';
-      }
-      
-      showScreen('votingScreen');
-    } else {
-      showNotification('Нет доступных вариантов для голосования.', 'warning');
-      showScreen('gameScreen');
+    }
+    
+    // Отображаем экран голосования
+    showScreen('votingScreen');
+    
+    // Обновляем статус голосования
+    const votingStatus = document.getElementById('votingStatus');
+    if (votingStatus) {
+      votingStatus.textContent = 'Выберите 2 самых смешных ответа';
     }
   } catch (error) {
-    console.error('Ошибка загрузки вариантов:', error);
-    showNotification('Произошла ошибка при загрузке вариантов для голосования: ' + error.message, 'error');
-    showScreen('gameScreen');
+    console.error('Ошибка при загрузке вариантов голосования:', error);
+    showNotification('Произошла ошибка при загрузке вариантов. Попробуйте перезагрузить страницу.', 'error');
   }
 }
 
@@ -717,17 +773,16 @@ function toggleVoteSelection(element) {
   }
 }
 
-// Отправка голосов
+// Улучшенная функция для отправки голосов
 async function submitVotes() {
-  if (!currentGame || !currentGame.id) {
-    showNotification('Информация об игре отсутствует', 'error');
+  const selected = document.querySelectorAll('.answer-option.selected');
+  
+  if (selected.length !== 2) {
+    showNotification('Пожалуйста, выберите ровно 2 ответа', 'warning');
     return;
   }
   
-  if (selectedAnswers.length === 0) {
-    showNotification('Выберите хотя бы один ответ', 'warning');
-    return;
-  }
+  const votedFor = Array.from(selected).map(el => el.dataset.id);
   
   try {
     const response = await fetch(`${API_URL}/games/${currentGame.id}/vote`, {
@@ -737,28 +792,48 @@ async function submitVotes() {
       },
       body: JSON.stringify({
         userId: currentUser.id,
-        votedFor: selectedAnswers
+        votedFor: votedFor
       })
     });
     
     if (!response.ok) {
-      throw new Error(`Ошибка HTTP: ${response.status}`);
+      const error = await response.json();
+      showNotification(`Ошибка при голосовании: ${error.error}`, 'error');
+      return;
     }
     
-    const data = await response.json();
+    const result = await response.json();
     
-    showNotification('Ваши голоса учтены!', 'success');
+    showNotification('Ваш голос принят! Спасибо за участие.', 'success');
     
-    if (data.resultsReady) {
-      currentGame.status = 'results';
+    // Если результаты уже готовы, показываем их
+    if (result.resultsReady) {
       loadResults();
     } else {
-      showNotification('Ожидайте, пока все участники проголосуют.', 'info');
-      showScreen('gameScreen');
+      // Иначе обновляем статус голосования
+      const votingStatus = document.getElementById('votingStatus');
+      if (votingStatus) {
+        votingStatus.textContent = 'Ваш голос принят! Ожидаем, пока проголосуют все участники...';
+        votingStatus.style.color = 'var(--accent-green)';
+      }
+      
+      // Отключаем кнопку голосования
+      const submitVotesBtn = document.getElementById('submitVotesBtn');
+      if (submitVotesBtn) {
+        submitVotesBtn.disabled = true;
+        submitVotesBtn.style.opacity = '0.5';
+      }
+      
+      // Отключаем выбор вариантов
+      const options = document.querySelectorAll('.answer-option');
+      options.forEach(option => {
+        option.onclick = null;
+        option.style.cursor = 'default';
+      });
     }
   } catch (error) {
-    console.error('Ошибка отправки голосов:', error);
-    showNotification('Произошла ошибка при отправке голосов. Пожалуйста, попробуйте еще раз.', 'error');
+    console.error('Ошибка при отправке голосов:', error);
+    showNotification('Произошла ошибка при отправке голосов. Попробуйте еще раз.', 'error');
   }
 }
 
@@ -820,93 +895,75 @@ async function loadResults() {
   }
 }
 
-// Инициализация при загрузке DOM
+// Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
-  console.log("DOMContentLoaded вызван");
+  console.log('Инициализация приложения...');
   
-  try {
-    // Добавляем обработчики для кнопок
-    const buttonHandlers = {
-      'submitNameBtn': saveName,
-      'backToStartBtn': goBack,
-      'createGameBtn': createNewGame,
-      'refreshGamesBtn': loadGames,
-      'submitQuestionBtn': saveQuestion,
-      'submitAnswerBtn': submitAnswer,
-      'submitVotesBtn': submitVotes,
-      'backToMainFromQuestionBtn': goBack,
-      'backToMainFromAnswerBtn': goBack,
-      'backToMainFromVotingBtn': goBack,
-      'backToMainBtn': () => showScreen('gameScreen'),
-      // Новые обработчики для выбора имени
-      'newNameBtn': showNewNameForm,
-      'existingNameBtn': showExistingNames,
-      'backToNameChoiceBtn': showNameChoiceOptions,
-      'backToNameChoiceFromExistingBtn': showNameChoiceOptions
-    };
-    
-    // Регистрируем обработчики через безопасную функцию
-    Object.keys(buttonHandlers).forEach(btnId => {
-      const button = document.getElementById(btnId);
-      if (button) {
-        console.log(`Регистрируем обработчик для кнопки ${btnId}`);
-        button.addEventListener('click', buttonHandlers[btnId]);
-      } else {
-        console.warn(`Кнопка ${btnId} не найдена`);
-      }
-    });
-    
-    // Добавляем обработчик для поля ввода имени
-    const nameInput = document.getElementById('nameInput');
-    if (nameInput) {
-      nameInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-          console.log('Нажат Enter в поле имени');
-          saveName();
-        }
-      });
+  // Регистрация обработчиков для кнопок выбора имени
+  const newNameBtn = document.getElementById('newNameBtn');
+  if (newNameBtn) {
+    newNameBtn.addEventListener('click', showNewNameForm);
+  }
+  
+  const existingNameBtn = document.getElementById('existingNameBtn');
+  if (existingNameBtn) {
+    existingNameBtn.addEventListener('click', showExistingNames);
+  }
+  
+  // Регистрация обработчиков для кнопок "Назад"
+  const backButtons = [
+    { id: 'backToNameChoiceBtn', action: showNameChoiceOptions },
+    { id: 'backToNameChoiceFromExistingBtn', action: showNameChoiceOptions },
+    { id: 'backToStartBtn', action: () => showScreen('startScreen') },
+    { id: 'backToMainFromQuestionBtn', action: () => showScreen('gameScreen') },
+    { id: 'backToMainFromAnswerBtn', action: () => showScreen('gameScreen') },
+    { id: 'backToMainFromVotingBtn', action: () => showScreen('gameScreen') },
+    { id: 'backToMainBtn', action: () => showScreen('gameScreen') }
+  ];
+  
+  backButtons.forEach(button => {
+    const element = document.getElementById(button.id);
+    if (element) {
+      element.addEventListener('click', button.action);
     }
-    
-    // Добавляем обработчик для поля вопроса
-    const questionInput = document.getElementById('questionInput');
-    if (questionInput) {
-      questionInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          saveQuestion();
-        }
-      });
-    }
-    
-    // Добавляем обработчик для поля ответа
-    const answerInput = document.getElementById('answerInput');
-    if (answerInput) {
-      answerInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          submitAnswer();
-        }
-      });
-    }
-    
-    // Добавляем глобальную функцию для выбора имени из списка
-    window.selectExistingName = selectExistingName;
-    
-    // Запускаем проверку статуса игры
-    startStatusCheck();
-    
-    // Показываем стартовый экран
-    showScreen('startScreen');
-    console.log("Инициализация успешно завершена");
-    
-    // Добавляем информацию в debugInfo, если он существует
-    const debugInfo = document.getElementById('debugInfo');
-    if (debugInfo) {
-      debugInfo.innerHTML += '<div style="color: white;">Инициализация JS успешно завершена</div>';
-    }
-    
-  } catch (error) {
-    console.error("Критическая ошибка при инициализации:", error);
+  });
+  
+  // Регистрация обработчиков для функциональных кнопок
+  const submitNameBtn = document.getElementById('submitNameBtn');
+  if (submitNameBtn) {
+    submitNameBtn.addEventListener('click', saveName);
+  }
+  
+  const createGameBtn = document.getElementById('createGameBtn');
+  if (createGameBtn) {
+    createGameBtn.addEventListener('click', createNewGame);
+  }
+  
+  const refreshGamesBtn = document.getElementById('refreshGamesBtn');
+  if (refreshGamesBtn) {
+    refreshGamesBtn.addEventListener('click', loadGames);
+  }
+  
+  const submitQuestionBtn = document.getElementById('submitQuestionBtn');
+  if (submitQuestionBtn) {
+    submitQuestionBtn.addEventListener('click', saveQuestion);
+  }
+  
+  const submitAnswerBtn = document.getElementById('submitAnswerBtn');
+  if (submitAnswerBtn) {
+    submitAnswerBtn.addEventListener('click', submitAnswer);
+  }
+  
+  const submitVotesBtn = document.getElementById('submitVotesBtn');
+  if (submitVotesBtn) {
+    submitVotesBtn.addEventListener('click', submitVotes);
+  }
+
+  // Если мы внутри Telegram WebApp, готовим его
+  if (window.Telegram && window.Telegram.WebApp) {
+    window.Telegram.WebApp.ready();
+    // Настраиваем обработчик кнопки "Назад"
+    window.Telegram.WebApp.BackButton.onClick(goBack);
   }
 });
 
