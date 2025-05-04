@@ -5,7 +5,9 @@ const gameManager = require('./gameManager');
 const userManager = require('./userManager');
 const path = require('path');
 const dotenv = require('dotenv');
-const { Telegraf } = require('telegraf');
+const { Telegraf, Scenes, session } = require('telegraf');
+const { Markup } = require('telegraf');
+const fs = require('fs');
 
 // Загружаем переменные окружения
 dotenv.config();
@@ -24,6 +26,42 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Загружаем данные
 gameManager.loadGames();
 userManager.loadUsers();
+
+// Сцены
+const nameScene = require('./scenes/nameScene');
+const answerScene = require('./scenes/answerScene');
+const customQuestionScene = require('./scenes/customQuestionScene');
+
+// Инициализация сцен
+const stage = new Scenes.Stage([nameScene, answerScene, customQuestionScene]);
+bot.use(session());
+bot.use(stage.middleware());
+
+// --- КОНСТАНТЫ И ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+const MAX_ANSWERS = 10;
+
+function createStyledMessage(title, content, emoji = '📝') {
+  return `<b>🔸🔹🔸 ${emoji} ${title} ${emoji} 🔸🔹🔸</b>\n\n${content}`;
+}
+
+// --- ОБРАБОТЧИКИ КОМАНД И CALLBACK'ОВ ---
+
+bot.command('start', async (ctx) => {
+  try {
+    await ctx.reply(
+      createStyledMessage('ДОБРО ПОЖАЛОВАТЬ', 'Я бот для игры в смешные вопросы PapaTrubok. Чтобы начать, нажмите кнопку ниже!', '🎭'),
+      {
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('🚀 Старт', 'start_game')]
+        ])
+      }
+    );
+  } catch (error) {
+    console.error('Ошибка при обработке команды start:', error);
+    ctx.reply('Произошла ошибка. Пожалуйста, попробуйте снова ввести /start');
+  }
+});
 
 // API эндпоинты
 
@@ -511,6 +549,25 @@ setInterval(() => {
     console.log(`Очищено ${cleaned} старых игр`);
   }
 }, 1000 * 60 * 60); // Каждый час
+
+// --- ЗАПУСК БОТА ---
+(async () => {
+  try {
+    await bot.telegram.setMyCommands([
+      { command: 'start', description: 'Запустить бота' },
+      { command: 'newgame', description: 'Начать новую игру' },
+      { command: 'help', description: 'Показать правила игры' }
+    ]);
+    await bot.launch();
+    console.log('Бот успешно запущен!');
+  } catch (err) {
+    console.error('Ошибка при запуске бота:', err);
+  }
+})();
+
+// Обработка завершения
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
 
 // Запуск сервера
 app.listen(PORT, () => {
