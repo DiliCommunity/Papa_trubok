@@ -37,6 +37,12 @@ function showScreen(screenId) {
   
   console.log(`Показываем экран: ${screenId}`);
   
+  // Скрываем дебаг-панель при переключении экранов
+  const debugPanel = document.getElementById('debugPanel');
+  if (debugPanel && debugPanel.style.display === 'block') {
+    debugPanel.style.display = 'none';
+  }
+  
   // Скрываем все экраны
   screens.forEach(id => {
     const screen = document.getElementById(id);
@@ -69,6 +75,13 @@ function showScreen(screenId) {
 // Обработчик для начала приложения
 window.startApp = function() {
   console.log("Вызвана функция startApp()");
+  
+  // Скрываем дебаг-панель, если она открыта
+  const debugPanel = document.getElementById('debugPanel');
+  if (debugPanel) {
+    debugPanel.style.display = 'none';
+  }
+  
   showScreen('nameScreen');
 };
 
@@ -422,7 +435,8 @@ async function checkGameStatus() {
       }
     }
   } catch (error) {
-    console.error('Ошибка при проверке статуса игры:', error);
+    // Скрываем периодические ошибки проверки статуса
+    // console.error('Ошибка при проверке статуса игры:', error);
   }
 }
 

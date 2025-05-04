@@ -21,8 +21,8 @@
             errorDiv.innerHTML = `<strong>ОШИБКА:</strong> ${message}<br>Файл: ${source}<br>Строка: ${lineno}`;
             debugInfo.appendChild(errorDiv);
             
-            // Автоматически показываем панель отладки при ошибке
-            document.getElementById('debugPanel').style.display = 'block';
+            // Не показываем автоматически панель отладки при ошибке
+            // document.getElementById('debugPanel').style.display = 'block';
           }
         }, 100);
         
@@ -31,6 +31,11 @@
     </script>
 </head>
 <body>
+    <!-- Малозаметная кнопка для доступа к отладке -->
+    <div style="position: fixed; top: 5px; right: 5px; z-index: 9999;">
+        <button onclick="document.getElementById('debugPanel').style.display='block'" style="opacity: 0.2; background: transparent; border: none; color: #999; font-size: 10px;">debug</button>
+    </div>
+    
     <div class="container">
         <div class="papyrus">
             <div class="hieroglyph-border"></div>
@@ -52,11 +57,16 @@
             <div class="scarab bottom-right">𓆣</div>
             
             <!-- Диагностическая панель -->
-            <div id="debugPanel" style="position: fixed; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); color: white; padding: 10px; z-index: 10000; display: none;">
-                <button onclick="this.parentNode.style.display='none'">Закрыть</button>
-                <button onclick="clearAllData()">Сбросить данные</button>
-                <button onclick="toggleScreens()">Показать все экраны</button>
-                <div id="debugInfo"></div>
+            <div id="debugPanel" style="position: fixed; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); color: white; padding: 10px; z-index: 10000; display: none; max-height: 200px; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                    <div>
+                        <button onclick="this.parentNode.parentNode.parentNode.style.display='none'">Закрыть</button>
+                        <button onclick="clearAllData()">Сбросить данные</button>
+                        <button onclick="toggleScreens()">Показать все экраны</button>
+                    </div>
+                    <button onclick="document.getElementById('debugInfo').innerHTML = ''">Очистить лог</button>
+                </div>
+                <div id="debugInfo" style="max-height: 150px; overflow-y: auto;"></div>
             </div>
             
             <!-- Экран запуска -->
@@ -84,7 +94,7 @@
                 
                 <div class="button-group">
                     <button class="papyrus-button shimmer" onclick="startApp()">Начать игру</button>
-                    <button class="papyrus-button" onclick="document.getElementById('debugPanel').style.display='block'">Debug</button>
+                    <button class="papyrus-button" onclick="document.getElementById('debugPanel').style.display='block'" style="font-size: smaller; opacity: 0.5; margin-top: 10px;">Debug</button>
                 </div>
             </div>
             
@@ -248,31 +258,62 @@
         
         // Перехватываем console.error для отображения в панели
         const originalConsoleError = console.error;
+        let errorMessageCount = 0;
+
         console.error = function() {
             originalConsoleError.apply(console, arguments);
             const debugInfo = document.getElementById('debugInfo');
             if (debugInfo) {
+                // Ограничиваем количество сообщений об ошибках
+                if (errorMessageCount >= MAX_DEBUG_MESSAGES) {
+                    // Удаляем старые сообщения, если достигли лимита
+                    if (debugInfo.childNodes.length > MAX_DEBUG_MESSAGES) {
+                        debugInfo.removeChild(debugInfo.firstChild);
+                    }
+                } else {
+                    errorMessageCount++;
+                }
+                
                 const errorMsg = Array.from(arguments).join(' ');
                 const errorDiv = document.createElement('div');
                 errorDiv.style.color = 'red';
                 errorDiv.style.margin = '5px 0';
                 errorDiv.textContent = `ERROR: ${errorMsg}`;
                 debugInfo.appendChild(errorDiv);
+                
+                // Прокручиваем к последнему сообщению
+                debugInfo.scrollTop = debugInfo.scrollHeight;
             }
         };
         
         // Перехватываем console.log для отображения в панели
         const originalConsoleLog = console.log;
+        const MAX_DEBUG_MESSAGES = 50; // Ограничиваем количество сообщений
+        let debugMessageCount = 0;
+
         console.log = function() {
             originalConsoleLog.apply(console, arguments);
             const debugInfo = document.getElementById('debugInfo');
             if (debugInfo) {
+                // Ограничиваем количество сообщений
+                if (debugMessageCount >= MAX_DEBUG_MESSAGES) {
+                    // Удаляем старые сообщения, если достигли лимита
+                    if (debugInfo.childNodes.length > MAX_DEBUG_MESSAGES) {
+                        debugInfo.removeChild(debugInfo.firstChild);
+                    }
+                } else {
+                    debugMessageCount++;
+                }
+                
                 const logMsg = Array.from(arguments).join(' ');
                 const logDiv = document.createElement('div');
                 logDiv.style.color = 'lightgreen';
                 logDiv.style.margin = '2px 0';
                 logDiv.textContent = `LOG: ${logMsg}`;
                 debugInfo.appendChild(logDiv);
+                
+                // Прокручиваем к последнему сообщению
+                debugInfo.scrollTop = debugInfo.scrollHeight;
             }
         };
         
