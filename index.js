@@ -825,9 +825,16 @@ bot.action(/start_game_now_(\d+)/, (ctx) => {
       { command: 'help', description: 'Показать правила игры' }
     ]);
     
-    // Запуск бота
-    await bot.launch();
-    console.log('Бот успешно запущен!');
+    if (process.env.NODE_ENV === 'production') {
+      // Запуск через вебхук в продакшене
+      const WEBHOOK_URL = process.env.WEBHOOK_URL || 'https://имя-вашего-проекта.onrender.com/webhook';
+      await bot.telegram.setWebhook(WEBHOOK_URL);
+      console.log(`Бот запущен в режиме webhook: ${WEBHOOK_URL}`);
+    } else {
+      // Локальный режим polling
+      await bot.launch();
+      console.log('Бот запущен в режиме long polling');
+    }
   } catch (err) {
     console.error('Ошибка при запуске бота:', err);
   }

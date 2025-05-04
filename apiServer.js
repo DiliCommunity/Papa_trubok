@@ -21,6 +21,14 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Добавляем webhook для бота
+app.use(bot.webhookCallback('/webhook'));
+// Альтернативный способ настройки вебхука
+app.post('/webhook', (req, res) => {
+  bot.handleUpdate(req.body);
+  res.sendStatus(200);
+});
+
 // Загружаем данные
 gameManager.loadGames();
 userManager.loadUsers();
