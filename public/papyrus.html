@@ -10,20 +10,22 @@
       window.onerror = function(message, source, lineno, colno, error) {
         console.error("Ошибка JavaScript:", message, "в", source, "строка:", lineno);
         
-        // Добавим видимое сообщение об ошибке на странице
-        const errorDiv = document.createElement('div');
-        errorDiv.style.position = 'fixed';
-        errorDiv.style.top = '10px';
-        errorDiv.style.left = '10px';
-        errorDiv.style.right = '10px';
-        errorDiv.style.backgroundColor = 'rgba(255, 0, 0, 0.8)';
-        errorDiv.style.color = 'white';
-        errorDiv.style.padding = '10px';
-        errorDiv.style.zIndex = '9999';
-        errorDiv.style.borderRadius = '5px';
-        errorDiv.innerHTML = `<strong>Ошибка JavaScript:</strong> ${message}<br>Файл: ${source}<br>Строка: ${lineno}`;
+        // Вместо красной панели сверху, добавляем ошибку в debugInfo, если он существует
+        setTimeout(() => {
+          const debugInfo = document.getElementById('debugInfo');
+          if (debugInfo) {
+            const errorDiv = document.createElement('div');
+            errorDiv.style.color = 'red';
+            errorDiv.style.margin = '5px 0';
+            errorDiv.style.fontWeight = 'bold';
+            errorDiv.innerHTML = `<strong>ОШИБКА:</strong> ${message}<br>Файл: ${source}<br>Строка: ${lineno}`;
+            debugInfo.appendChild(errorDiv);
+            
+            // Автоматически показываем панель отладки при ошибке
+            document.getElementById('debugPanel').style.display = 'block';
+          }
+        }, 100);
         
-        document.body.appendChild(errorDiv);
         return true; // Предотвращаем стандартное сообщение об ошибке браузера
       };
     </script>
