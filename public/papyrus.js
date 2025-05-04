@@ -119,7 +119,134 @@ window.startApp = function() {
   }
   
   showScreen('nameScreen');
+  
+  // Показываем главный выбор имен при загрузке экрана
+  showNameChoiceOptions();
 };
+
+// Функция для отображения опций выбора имени
+function showNameChoiceOptions() {
+  // Скрываем все секции ввода имени
+  const sections = ['newNameSection', 'existingNameSection'];
+  sections.forEach(id => {
+    const section = document.getElementById(id);
+    if (section) section.style.display = 'none';
+  });
+  
+  // Показываем главные кнопки выбора
+  const choiceButtons = document.getElementById('nameChoiceButtons');
+  if (choiceButtons) choiceButtons.style.display = 'block';
+  
+  // Проверяем, есть ли сохраненные имена
+  const savedNames = getSavedNames();
+  const existingNameBtn = document.getElementById('existingNameBtn');
+  if (existingNameBtn) {
+    // Деактивируем кнопку, если нет сохраненных имен
+    if (savedNames.length === 0) {
+      existingNameBtn.classList.add('disabled');
+      existingNameBtn.style.opacity = '0.5';
+      existingNameBtn.title = 'Нет сохраненных имен';
+    } else {
+      existingNameBtn.classList.remove('disabled');
+      existingNameBtn.style.opacity = '1';
+      existingNameBtn.title = '';
+    }
+  }
+}
+
+// Функция для показа формы ввода нового имени
+function showNewNameForm() {
+  // Скрываем кнопки выбора
+  const choiceButtons = document.getElementById('nameChoiceButtons');
+  if (choiceButtons) choiceButtons.style.display = 'none';
+  
+  // Скрываем секцию существующих имен
+  const existingNameSection = document.getElementById('existingNameSection');
+  if (existingNameSection) existingNameSection.style.display = 'none';
+  
+  // Показываем форму нового имени
+  const newNameSection = document.getElementById('newNameSection');
+  if (newNameSection) newNameSection.style.display = 'block';
+  
+  // Фокус на поле ввода
+  const nameInput = document.getElementById('nameInput');
+  if (nameInput) nameInput.focus();
+}
+
+// Функция для показа списка сохраненных имен
+function showExistingNames() {
+  // Получаем сохраненные имена
+  const savedNames = getSavedNames();
+  if (savedNames.length === 0) {
+    showNotification('Нет сохраненных имен. Создайте новое имя.', 'info');
+    showNewNameForm();
+    return;
+  }
+  
+  // Скрываем кнопки выбора
+  const choiceButtons = document.getElementById('nameChoiceButtons');
+  if (choiceButtons) choiceButtons.style.display = 'none';
+  
+  // Скрываем форму нового имени
+  const newNameSection = document.getElementById('newNameSection');
+  if (newNameSection) newNameSection.style.display = 'none';
+  
+  // Показываем секцию с сохраненными именами
+  const existingNameSection = document.getElementById('existingNameSection');
+  if (existingNameSection) existingNameSection.style.display = 'block';
+  
+  // Заполняем список сохраненных имен
+  const savedNamesList = document.getElementById('savedNamesList');
+  if (savedNamesList) {
+    let html = '';
+    savedNames.forEach(name => {
+      html += `
+        <div class="game-item">
+          <h3>${name}</h3>
+          <button class="papyrus-button shimmer" onclick="selectExistingName('${name}')">Выбрать</button>
+        </div>
+      `;
+    });
+    savedNamesList.innerHTML = html;
+  }
+}
+
+// Функция для выбора существующего имени
+function selectExistingName(name) {
+  console.log(`Выбрано имя: ${name}`);
+  currentUser.name = name;
+  showScreen('gameScreen');
+  showNotification(`Добро пожаловать, ${name}!`, 'success');
+  
+  // Реальная загрузка списка игр с сервера
+  loadGames();
+}
+
+// Получение сохраненных имен из localStorage
+function getSavedNames() {
+  // Получаем имена из локального хранилища
+  let savedNames = localStorage.getItem('papaTrubokSavedNames');
+  
+  if (savedNames) {
+    try {
+      savedNames = JSON.parse(savedNames);
+      if (Array.isArray(savedNames)) {
+        return savedNames;
+      }
+    } catch (e) {
+      console.error('Ошибка парсинга сохраненных имен:', e);
+    }
+  }
+  
+  return [];
+}
+
+// Сохранение имен в localStorage
+function saveNamesToStorage(names) {
+  if (Array.isArray(names)) {
+    localStorage.setItem('papaTrubokSavedNames', JSON.stringify(names));
+  }
+}
 
 // Сохранение имени пользователя
 function saveName() {
@@ -138,6 +265,14 @@ function saveName() {
   
   console.log(`Сохраняем имя: ${name}`);
   currentUser.name = name;
+  
+  // Сохраняем имя в локальное хранилище
+  const savedNames = getSavedNames();
+  if (!savedNames.includes(name)) {
+    savedNames.push(name);
+    saveNamesToStorage(savedNames);
+  }
+  
   showScreen('gameScreen');
   showNotification(`Добро пожаловать, ${name}!`, 'success');
   
@@ -702,7 +837,12 @@ document.addEventListener('DOMContentLoaded', function() {
       'backToMainFromQuestionBtn': goBack,
       'backToMainFromAnswerBtn': goBack,
       'backToMainFromVotingBtn': goBack,
-      'backToMainBtn': () => showScreen('gameScreen')
+      'backToMainBtn': () => showScreen('gameScreen'),
+      // Новые обработчики для выбора имени
+      'newNameBtn': showNewNameForm,
+      'existingNameBtn': showExistingNames,
+      'backToNameChoiceBtn': showNameChoiceOptions,
+      'backToNameChoiceFromExistingBtn': showNameChoiceOptions
     };
     
     // Регистрируем обработчики через безопасную функцию
@@ -748,6 +888,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       });
     }
+    
+    // Добавляем глобальную функцию для выбора имени из списка
+    window.selectExistingName = selectExistingName;
     
     // Запускаем проверку статуса игры
     startStatusCheck();

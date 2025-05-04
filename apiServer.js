@@ -208,28 +208,42 @@ app.post('/api/games/:gameId/join', (req, res) => {
       joinTime: new Date().toISOString()
     };
     
+    // Если у игры есть вопрос, переводим её в статус сбора ответов
+    if (game.currentQuestion && game.status === 'waiting_players') {
+      game.status = 'collecting_answers';
+      console.log(`Игра ${gameId} переведена в статус сбора ответов`);
+    }
+    
     gameManager.setGame(gameId, game);
 
     // Отправляем уведомление создателю игры
     try {
-      bot.telegram.sendMessage(
-        game.initiator,
-        `🎮 Новый игрок присоединился!\n\n${userName} вошел в игру.\nВсего игроков: ${game.participants.length}/10`,
-        {
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: 'Начать игру сейчас', callback_data: `start_game_now_${gameId}` }]
-            ]
+      // Проверяем ID создателя перед отправкой уведомления
+      if (game.initiator && typeof game.initiator === 'string' && game.initiator.length > 0) {
+        bot.telegram.sendMessage(
+          game.initiator,
+          `🎮 Новый игрок присоединился!\n\n${userName} вошел в игру.\nВсего игроков: ${game.participants.length}/10`,
+          {
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: 'Начать игру сейчас', callback_data: `start_game_now_${gameId}` }]
+              ]
+            }
           }
-        }
-      );
+        ).catch(error => {
+          // Логируем ошибку, но не прерываем выполнение
+          console.warn(`Не удалось отправить уведомление создателю игры (ID: ${game.initiator}):`, error.message);
+        });
+      } else {
+        console.warn(`Невалидный ID создателя игры: ${game.initiator}`);
+      }
     } catch (e) {
       console.error('Не удалось отправить уведомление создателю игры:', e);
     }
   }
   
-  res.json({ status: 'success', gameId, question: game.currentQuestion });
+  res.json({ status: 'success', gameId, question: game.currentQuestion, status: game.status });
 });
 
 // Отправить ответ на вопрос
@@ -271,24 +285,33 @@ app.post('/api/games/:gameId/answer', (req, res) => {
     game.status = 'voting';
     
     // Уведомляем участников о начале голосования
-    game.participants.forEach(participantId => {
-      try {
-        bot.telegram.sendMessage(
-          participantId,
-          `🎯 Голосование началось!\n\nУже набралось 10 ответов на вопрос:\n"${game.currentQuestion}"\n\nОткройте мини-приложение, чтобы проголосовать!`,
-          {
-            parse_mode: 'HTML',
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: 'Открыть голосование', web_app: { url: 'https://ваш-домен.com' } }]
-              ]
-            }
+    if (Array.isArray(game.participants)) {
+      game.participants.forEach(participantId => {
+        try {
+          // Проверяем ID участника перед отправкой уведомления
+          if (participantId && typeof participantId === 'string' && participantId.length > 0) {
+            bot.telegram.sendMessage(
+              participantId,
+              `🎯 Голосование началось!\n\nУже набралось 10 ответов на вопрос:\n"${game.currentQuestion}"\n\nОткройте мини-приложение, чтобы проголосовать!`,
+              {
+                parse_mode: 'HTML',
+                reply_markup: {
+                  inline_keyboard: [
+                    [{ text: 'Открыть голосование', web_app: { url: 'https://ваш-домен.com' } }]
+                  ]
+                }
+              }
+            ).catch(error => {
+              console.warn(`Не удалось отправить уведомление участнику ${participantId}:`, error.message);
+            });
           }
-        );
-      } catch (e) {
-        console.error(`Не удалось отправить уведомление участнику ${participantId}:`, e);
-      }
-    });
+        } catch (e) {
+          console.error(`Не удалось отправить уведомление участнику ${participantId}:`, e);
+        }
+      });
+    } else {
+      console.warn(`Отсутствует список участников для уведомления о начале автоматического голосования в игре ${gameId}`);
+    }
   }
   
   gameManager.setGame(gameId, game);
@@ -329,24 +352,33 @@ app.post('/api/games/:gameId/startVoting', (req, res) => {
   gameManager.setGame(gameId, game);
   
   // Уведомляем участников о начале голосования
-  game.participants.forEach(participantId => {
-    try {
-      bot.telegram.sendMessage(
-        participantId,
-        `🎯 Голосование началось!\n\nСоздатель игры начал голосование по вопросу:\n"${game.currentQuestion}"\n\nОткройте мини-приложение, чтобы проголосовать!`,
-        {
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: 'Открыть голосование', web_app: { url: 'https://ваш-домен.com' } }]
-            ]
-          }
+  if (Array.isArray(game.participants)) {
+    game.participants.forEach(participantId => {
+      try {
+        // Проверяем ID участника перед отправкой уведомления
+        if (participantId && typeof participantId === 'string' && participantId.length > 0) {
+          bot.telegram.sendMessage(
+            participantId,
+            `🎯 Голосование началось!\n\nСоздатель игры начал голосование по вопросу:\n"${game.currentQuestion}"\n\nОткройте мини-приложение, чтобы проголосовать!`,
+            {
+              parse_mode: 'HTML',
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: 'Открыть голосование', web_app: { url: 'https://ваш-домен.com' } }]
+                ]
+              }
+            }
+          ).catch(error => {
+            console.warn(`Не удалось отправить уведомление участнику ${participantId}:`, error.message);
+          });
         }
-      );
-    } catch (e) {
-      console.error(`Не удалось отправить уведомление участнику ${participantId}:`, e);
-    }
-  });
+      } catch (e) {
+        console.error(`Не удалось отправить уведомление участнику ${participantId}:`, e);
+      }
+    });
+  } else {
+    console.warn(`Отсутствует список участников для уведомления о начале голосования в игре ${gameId}`);
+  }
   
   res.json({ status: 'success' });
 });
@@ -522,24 +554,33 @@ function notifyAboutResults(gameId) {
   resultText += '\nСпасибо всем за участие! 👏';
   
   // Отправляем уведомление всем участникам
-  game.participants.forEach(participantId => {
-    try {
-      bot.telegram.sendMessage(
-        participantId,
-        resultText,
-        {
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: 'Посмотреть подробности', web_app: { url: 'https://ваш-домен.com' } }]
-            ]
-          }
+  if (Array.isArray(game.participants)) {
+    game.participants.forEach(participantId => {
+      try {
+        // Проверяем ID участника перед отправкой уведомления
+        if (participantId && typeof participantId === 'string' && participantId.length > 0) {
+          bot.telegram.sendMessage(
+            participantId,
+            resultText,
+            {
+              parse_mode: 'HTML',
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: 'Посмотреть подробности', web_app: { url: 'https://ваш-домен.com' } }]
+                ]
+              }
+            }
+          ).catch(error => {
+            console.warn(`Не удалось отправить результаты участнику ${participantId}:`, error.message);
+          });
         }
-      );
-    } catch (e) {
-      console.error(`Не удалось отправить результаты участнику ${participantId}:`, e);
-    }
-  });
+      } catch (e) {
+        console.error(`Не удалось отправить результаты участнику ${participantId}:`, e);
+      }
+    });
+  } else {
+    console.warn(`Отсутствует список участников для уведомления о результатах игры ${gameId}`);
+  }
 }
 
 // Эндпоинт для проверки доступности сервера (для UptimeRobot)

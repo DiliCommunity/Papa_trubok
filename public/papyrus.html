@@ -31,9 +31,9 @@
     </script>
 </head>
 <body>
-    <!-- Малозаметная кнопка для доступа к отладке -->
-    <div style="position: fixed; top: 5px; right: 5px; z-index: 9999;">
-        <button onclick="document.getElementById('debugPanel').style.display='block'" style="opacity: 0.2; background: transparent; border: none; color: #999; font-size: 10px;">debug</button>
+    <!-- Добавим скрытую кнопку для отладки только для администратора в правом верхнем углу -->
+    <div style="position: fixed; top: 5px; right: 5px; z-index: 10000; opacity: 0.1;">
+        <button onclick="window.location.href='/?debug=true'" style="background: transparent; border: none; font-size: 8px; color: #999; cursor: pointer;">debug</button>
     </div>
     
     <div class="container">
@@ -55,19 +55,6 @@
             <div class="scarab top-right">𓆣</div>
             <div class="scarab bottom-left">𓆣</div>
             <div class="scarab bottom-right">𓆣</div>
-            
-            <!-- Диагностическая панель -->
-            <div id="debugPanel" style="position: fixed; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); color: white; padding: 10px; z-index: 10000; display: none; max-height: 200px; overflow-y: auto;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                    <div>
-                        <button onclick="this.parentNode.parentNode.parentNode.style.display='none'">Закрыть</button>
-                        <button onclick="clearAllData()">Сбросить данные</button>
-                        <button onclick="toggleScreens()">Показать все экраны</button>
-                    </div>
-                    <button onclick="document.getElementById('debugInfo').innerHTML = ''">Очистить лог</button>
-                </div>
-                <div id="debugInfo" style="max-height: 150px; overflow-y: auto;"></div>
-            </div>
             
             <!-- Экран запуска -->
             <div id="startScreen" style="display: block;">
@@ -105,13 +92,32 @@
                 </div>
                 
                 <div class="input-area">
-                    <p>Придумай прикольное имя, которое увидят все участники:</p>
-                    <div class="papyrus-scroll">
-                        <input type="text" id="nameInput" class="answer-input" placeholder="Твоё прикольное имя..." maxlength="20">
+                    <div id="nameChoiceButtons" class="button-group">
+                        <button id="newNameBtn" class="papyrus-button shimmer">Новое имя</button>
+                        <button id="existingNameBtn" class="papyrus-button shimmer">Использовать сохранённое имя</button>
                     </div>
-                    <div class="button-group">
-                        <button id="submitNameBtn" class="papyrus-button shimmer">Сохранить имя</button>
-                        <button id="backToStartBtn" class="papyrus-button shimmer back-button">Назад</button>
+                    
+                    <div id="newNameSection" style="display: none;">
+                        <p>Придумай прикольное имя, которое увидят все участники:</p>
+                        <div class="papyrus-scroll">
+                            <input type="text" id="nameInput" class="answer-input" placeholder="Твоё прикольное имя..." maxlength="20">
+                        </div>
+                        <div class="button-group">
+                            <button id="submitNameBtn" class="papyrus-button shimmer">Сохранить имя</button>
+                            <button id="backToNameChoiceBtn" class="papyrus-button shimmer back-button">Назад</button>
+                        </div>
+                    </div>
+                    
+                    <div id="existingNameSection" style="display: none;">
+                        <p>Выбери одно из твоих сохранённых имён:</p>
+                        <div id="savedNamesList" class="games-list"></div>
+                        <div class="button-group">
+                            <button id="backToNameChoiceFromExistingBtn" class="papyrus-button shimmer back-button">Назад</button>
+                        </div>
+                    </div>
+                    
+                    <div class="button-group" id="mainNameScreenButtons">
+                        <button id="backToStartBtn" class="papyrus-button shimmer back-button">Вернуться в начало</button>
                     </div>
                 </div>
             </div>
@@ -222,143 +228,16 @@
         </div>
     </div>
 
-    <!-- Встроенный скрипт диагностики -->
+    <!-- Удаляем встроенный скрипт диагностики, оставляя только минимум необходимого -->
     <script>
         // Полифилл для IE
         if (!window.location.origin) {
           window.location.origin = window.location.protocol + "//" + window.location.hostname + (window.location.port ? ':' + window.location.port: '');
         }
         
-        // Функция для очистки данных
-        function clearAllData() {
-            try {
-                localStorage.clear();
-                sessionStorage.clear();
-                console.log('Данные очищены');
-                alert('Локальные данные очищены');
-            } catch(e) {
-                console.error('Ошибка при очистке данных:', e);
-            }
-        }
-        
-        // Функция переключения отображения экранов для отладки
-        function toggleScreens() {
-            const screens = document.querySelectorAll('#startScreen, #nameScreen, #gameScreen, #questionScreen, #answerScreen, #votingScreen, #resultsScreen');
-            const visibleScreens = Array.from(screens).filter(s => s.style.display !== 'none');
-            
-            if (visibleScreens.length === screens.length) {
-                // Если показаны все экраны, оставляем только стартовый
-                screens.forEach(s => s.style.display = 'none');
-                document.getElementById('startScreen').style.display = 'block';
-            } else {
-                // Иначе показываем все
-                screens.forEach(s => s.style.display = 'block');
-            }
-        }
-        
-        // Перехватываем console.error для отображения в панели
-        const originalConsoleError = console.error;
-        let errorMessageCount = 0;
-
-        console.error = function() {
-            originalConsoleError.apply(console, arguments);
-            const debugInfo = document.getElementById('debugInfo');
-            if (debugInfo) {
-                // Ограничиваем количество сообщений об ошибках
-                if (errorMessageCount >= MAX_DEBUG_MESSAGES) {
-                    // Удаляем старые сообщения, если достигли лимита
-                    if (debugInfo.childNodes.length > MAX_DEBUG_MESSAGES) {
-                        debugInfo.removeChild(debugInfo.firstChild);
-                    }
-                } else {
-                    errorMessageCount++;
-                }
-                
-                const errorMsg = Array.from(arguments).join(' ');
-                const errorDiv = document.createElement('div');
-                errorDiv.style.color = 'red';
-                errorDiv.style.margin = '5px 0';
-                errorDiv.textContent = `ERROR: ${errorMsg}`;
-                debugInfo.appendChild(errorDiv);
-                
-                // Прокручиваем к последнему сообщению
-                debugInfo.scrollTop = debugInfo.scrollHeight;
-            }
-        };
-        
-        // Перехватываем console.log для отображения в панели
-        const originalConsoleLog = console.log;
-        const MAX_DEBUG_MESSAGES = 50; // Ограничиваем количество сообщений
-        let debugMessageCount = 0;
-
-        console.log = function() {
-            originalConsoleLog.apply(console, arguments);
-            const debugInfo = document.getElementById('debugInfo');
-            if (debugInfo) {
-                // Ограничиваем количество сообщений
-                if (debugMessageCount >= MAX_DEBUG_MESSAGES) {
-                    // Удаляем старые сообщения, если достигли лимита
-                    if (debugInfo.childNodes.length > MAX_DEBUG_MESSAGES) {
-                        debugInfo.removeChild(debugInfo.firstChild);
-                    }
-                } else {
-                    debugMessageCount++;
-                }
-                
-                const logMsg = Array.from(arguments).join(' ');
-                const logDiv = document.createElement('div');
-                logDiv.style.color = 'lightgreen';
-                logDiv.style.margin = '2px 0';
-                logDiv.textContent = `LOG: ${logMsg}`;
-                debugInfo.appendChild(logDiv);
-                
-                // Прокручиваем к последнему сообщению
-                debugInfo.scrollTop = debugInfo.scrollHeight;
-            }
-        };
-        
-        // Простые замены функций для диагностики
-        if (!window.startAppOriginal) {
-            window.startAppOriginal = window.startApp;
-            window.startApp = function() {
-                console.log('ВЫЗОВ: startApp()');
-                try {
-                    if (window.startAppOriginal) {
-                        return window.startAppOriginal();
-                    } else {
-                        const nameScreen = document.getElementById('nameScreen');
-                        if (nameScreen) {
-                            document.getElementById('startScreen').style.display = 'none';
-                            nameScreen.style.display = 'block';
-                            console.log('Показан экран ввода имени');
-                        } else {
-                            console.error('Экран ввода имени не найден');
-                        }
-                    }
-                } catch (e) {
-                    console.error('Ошибка в startApp:', e);
-                }
-            };
-        }
-        
-        // Диагностика загрузки
+        // Базовая инициализация для обеспечения совместимости
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('Страница загружена, запускаем диагностику...');
-            
-            // Проверяем наличие элементов
-            const elements = [
-                'startScreen', 'nameScreen', 'gameScreen', 'questionScreen', 
-                'answerScreen', 'votingScreen', 'resultsScreen', 'nameInput', 
-                'submitNameBtn'
-            ];
-            
-            elements.forEach(id => {
-                const el = document.getElementById(id);
-                console.log(`Элемент #${id}: ${el ? 'НАЙДЕН' : 'НЕ НАЙДЕН'}`);
-            });
-            
-            // Проверяем загрузку скрипта
-            console.log(`Скрипт papyrus.js ${typeof window.startAppOriginal !== 'undefined' ? 'загружен' : 'НЕ загружен'}`);
+            console.log('Страница загружена');
         });
     </script>
     
