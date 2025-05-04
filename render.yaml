@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: papatrubok-miniapp
+    env: node
+    buildCommand: npm install
+    startCommand: npm run web
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: PORT
+        value: 10000
+      - key: NODE_ENV
+        value: production
+    autoDeploy: true 

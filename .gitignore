@@ -1,0 +1,19 @@
+# Зависимости
+node_modules/
+
+# Файлы окружения
+.env
+
+# Логи
+logs
+*.log
+npm-debug.log*
+
+# Временные файлы
+.DS_Store
+.idea/
+.vscode/
+
+# Файлы данных
+games.json
+users.json

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PapaTrubok - Игра Смешных Вопросов</title>
+    <link rel="stylesheet" href="main.css">
+</head>
+<body>
+    <div class="container">
+        <div class="papyrus">
+            <div class="hieroglyph-border"></div>
+            
+            <!-- Эффекты порванных краев -->
+            <div class="torn-edge top-edge"></div>
+            <div class="torn-edge right-edge"></div>
+            <div class="torn-edge bottom-edge"></div>
+            <div class="torn-edge left-edge"></div>
+            
+            <!-- Потертости на папирусе -->
+            <div class="worn-spot spot1"></div>
+            <div class="worn-spot spot2"></div>
+            <div class="worn-spot spot3"></div>
+            
+            <div class="scarab top-left">𓆣</div>
+            <div class="scarab top-right">𓆣</div>
+            <div class="scarab bottom-left">𓆣</div>
+            <div class="scarab bottom-right">𓆣</div>
+            
+            <!-- Экран запуска -->
+            <div id="startScreen" style="display: none;">
+                <div class="title">
+                    <h1>PapaTrubok</h1>
+                    <p>Древнеегипетский свиток смешных вопросов</p>
+                </div>
+                
+                <div class="rules">
+                    <h2>Правила игры</h2>
+                    <ol>
+                        <li>Каждому участнику задаётся один и тот же вопрос</li>
+                        <li>Каждый участник отправляет свой самый смешной ответ</li>
+                        <li>Голосование начнётся когда:
+                            <ul>
+                                <li>Наберётся 10 ответов (автоматически)</li>
+                                <li>ИЛИ создатель игры нажмёт кнопку начала голосования</li>
+                            </ul>
+                        </li>
+                        <li>В голосовании каждый выбирает 2 самых смешных ответа (кроме своего)</li>
+                        <li>Побеждает участник с наибольшим количеством голосов</li>
+                    </ol>
+                </div>
+                
+                <div class="button-group">
+                    <button class="papyrus-button shimmer" onclick="startApp()">Начать игру</button>
+                </div>
+            </div>
+            
+            <!-- Экран ввода имени -->
+            <div id="nameScreen" style="display: none;">
+                <div class="title">
+                    <h1>Представься, путник!</h1>
+                </div>
+                
+                <div class="input-area">
+                    <p>Придумай прикольное имя, которое увидят все участники:</p>
+                    <input type="text" id="nameInput" class="papyrus-input" placeholder="Твоё прикольное имя..." maxlength="20">
+                    <button id="submitNameBtn" class="papyrus-button shimmer">Сохранить имя</button>
+                </div>
+            </div>
+            
+            <!-- Экран главного меню/списка игр -->
+            <div id="gameScreen" style="display: none;">
+                <div class="title">
+                    <h1>Выбери действие</h1>
+                </div>
+                
+                <div class="button-group">
+                    <button id="createGameBtn" class="papyrus-button shimmer">Создать новую игру</button>
+                    <button id="refreshGamesBtn" class="papyrus-button shimmer">Обновить список игр</button>
+                </div>
+                
+                <div class="games-list-container">
+                    <h2>Доступные игры:</h2>
+                    <div id="gamesList" class="games-list"></div>
+                </div>
+            </div>
+            
+            <!-- Экран создания вопроса -->
+            <div id="questionScreen" style="display: none;">
+                <div class="title">
+                    <h1>Придумай смешной вопрос</h1>
+                </div>
+                
+                <div class="input-area">
+                    <p>Напиши вопрос, на который игроки будут отвечать:</p>
+                    <textarea id="questionInput" class="papyrus-input" placeholder="Твой вопрос..." rows="4"></textarea>
+                    <button id="submitQuestionBtn" class="papyrus-button shimmer">Создать игру</button>
+                </div>
+            </div>
+            
+            <!-- Экран ответа на вопрос -->
+            <div id="answerScreen" style="display: none;">
+                <div class="title">
+                    <h1>Дай смешной ответ</h1>
+                </div>
+                
+                <div class="question-box">
+                    <div class="ancient-symbol left">𓀀</div>
+                    <div class="ancient-symbol right">𓁹</div>
+                    <h3>Вопрос:</h3>
+                    <p class="question-text" id="answerQuestionText"></p>
+                </div>
+                
+                <div class="input-area">
+                    <p>Напиши самый смешной ответ, который придёт в голову:</p>
+                    <textarea id="answerInput" class="papyrus-input" placeholder="Твой смешной ответ..." rows="4"></textarea>
+                    <button id="submitAnswerBtn" class="papyrus-button shimmer">Отправить ответ</button>
+                </div>
+            </div>
+            
+            <!-- Экран голосования -->
+            <div id="votingScreen" style="display: none;">
+                <div class="title">
+                    <h1>Голосование</h1>
+                </div>
+                
+                <div class="question-box">
+                    <div class="ancient-symbol left">𓀀</div>
+                    <div class="ancient-symbol right">𓁹</div>
+                    <h3>Вопрос:</h3>
+                    <p class="question-text" id="votingQuestionText"></p>
+                </div>
+                
+                <div class="voting-area">
+                    <h3>Выберите 2 самых смешных ответа (кроме своего):</h3>
+                    <div id="answerOptions" class="answer-options"></div>
+                    <p id="votingStatus" class="status-text"></p>
+                    <button id="submitVotesBtn" class="papyrus-button shimmer">Проголосовать</button>
+                </div>
+            </div>
+            
+            <!-- Экран результатов -->
+            <div id="resultsScreen" style="display: none;">
+                <div class="title">
+                    <h1>Результаты</h1>
+                </div>
+                
+                <div class="question-box">
+                    <div class="ancient-symbol left">𓀀</div>
+                    <div class="ancient-symbol right">𓁹</div>
+                    <h3>Вопрос:</h3>
+                    <p class="question-text" id="resultsQuestionText"></p>
+                </div>
+                
+                <div class="results-area">
+                    <h3>Итоги голосования:</h3>
+                    <div id="resultsList" class="results-list"></div>
+                    <button id="backToMainBtn" class="papyrus-button shimmer">Вернуться в меню</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="papyrus.js"></script>
+</body>
+</html> 
