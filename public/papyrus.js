@@ -8,6 +8,18 @@ const telegram = {
       id: Math.floor(Math.random() * 1000000), // В реальном приложении это будет настоящий id
       first_name: '', // Убираем слово "Пользователь" по умолчанию
     }
+  },
+  BackButton: {
+    onClick: function(callback) {
+      // Имитация метода onClick
+      console.log('BackButton.onClick зарегистрирован');
+    },
+    show: function() {
+      console.log('BackButton показан');
+    },
+    hide: function() {
+      console.log('BackButton скрыт');
+    }
   }
 };
 
@@ -520,13 +532,33 @@ async function loadResults() {
 
 // Проверка статуса игры
 async function checkGameStatus() {
-  if (!currentGame) return;
+  if (!currentGame || !currentGame.id) return;
   
   try {
-    const response = await fetch(`${API_URL}/games/${currentGame.id}`);
-    if (!response.ok) return;
+    // Проверяем соединение перед запросом
+    if (!navigator.onLine) {
+      console.log('Нет соединения с интернетом. Пропускаем проверку статуса игры.');
+      return;
+    }
     
-    const game = await response.json();
+    const response = await fetch(`${API_URL}/games/${currentGame.id}`)
+      .catch(err => {
+        console.warn('Ошибка сети при проверке статуса игры:', err);
+        return { ok: false };
+      });
+      
+    if (!response || !response.ok) {
+      console.warn(`Не удалось получить статус игры ${currentGame.id}. Код: ${response?.status || 'неизвестно'}`);
+      return;
+    }
+    
+    const game = await response.json()
+      .catch(err => {
+        console.warn('Ошибка при разборе JSON ответа:', err);
+        return null;
+      });
+    
+    if (!game) return;
     
     // Если статус игры изменился, обновляем интерфейс
     if (game.status === 'voting' && currentGame.status !== 'voting') {
@@ -541,6 +573,7 @@ async function checkGameStatus() {
     
   } catch (error) {
     console.error('Ошибка при проверке статуса игры:', error);
+    // Не показываем alert пользователю при ошибке проверки статуса
   }
 }
 
@@ -562,10 +595,12 @@ function initTelegramMiniApp() {
     // Настраиваем интерфейс под Telegram
     document.body.classList.add('telegram-theme');
     
-    // Настраиваем кнопку "назад" для Telegram
-    window.Telegram.WebApp.BackButton.onClick(() => {
-      goBack();
-    });
+    // Настраиваем кнопку "назад" для Telegram, но только если BackButton доступен
+    if (window.Telegram.WebApp.BackButton) {
+      window.Telegram.WebApp.BackButton.onClick(() => {
+        goBack();
+      });
+    }
   }
 }
 
@@ -586,47 +621,76 @@ function resetGame() {
 
 // Инициализация приложения при загрузке
 document.addEventListener('DOMContentLoaded', function() {
-  // Добавляем обработчики событий для всех кнопок
-  document.getElementById('submitNameBtn').addEventListener('click', saveName);
-  document.getElementById('createGameBtn').addEventListener('click', createNewGame);
-  document.getElementById('submitQuestionBtn').addEventListener('click', saveQuestion);
-  document.getElementById('submitAnswerBtn').addEventListener('click', submitAnswer);
-  document.getElementById('submitVotesBtn').addEventListener('click', submitVotes);
-  document.getElementById('backToMainBtn').addEventListener('click', showMainMenu);
-  document.getElementById('refreshGamesBtn').addEventListener('click', loadGames);
-  
-  // Добавляем обработчики для кнопок "Назад"
-  document.getElementById('backToStartBtn').addEventListener('click', goBack);
-  document.getElementById('backToMainFromQuestionBtn').addEventListener('click', goBack);
-  document.getElementById('backToMainFromAnswerBtn').addEventListener('click', goBack);
-  document.getElementById('backToMainFromVotingBtn').addEventListener('click', goBack);
-  
-  // Добавляем обработчики для полей ввода (отправка по Enter)
-  nameInput.addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') saveName();
-  });
-  
-  questionInput.addEventListener('keypress', function(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault(); // Предотвращаем перенос строки при обычном Enter
-      saveQuestion();
+  try {
+    // Добавляем обработчики событий для всех кнопок
+    const addEventListenerSafely = (id, event, handler) => {
+      const element = document.getElementById(id);
+      if (element) {
+        element.addEventListener(event, handler);
+      } else {
+        console.warn(`Элемент с ID ${id} не найден`);
+      }
+    };
+    
+    addEventListenerSafely('submitNameBtn', 'click', saveName);
+    addEventListenerSafely('createGameBtn', 'click', createNewGame);
+    addEventListenerSafely('submitQuestionBtn', 'click', saveQuestion);
+    addEventListenerSafely('submitAnswerBtn', 'click', submitAnswer);
+    addEventListenerSafely('submitVotesBtn', 'click', submitVotes);
+    addEventListenerSafely('backToMainBtn', 'click', showMainMenu);
+    addEventListenerSafely('refreshGamesBtn', 'click', loadGames);
+    
+    // Добавляем обработчики для кнопок "Назад"
+    addEventListenerSafely('backToStartBtn', 'click', goBack);
+    addEventListenerSafely('backToMainFromQuestionBtn', 'click', goBack);
+    addEventListenerSafely('backToMainFromAnswerBtn', 'click', goBack);
+    addEventListenerSafely('backToMainFromVotingBtn', 'click', goBack);
+    
+    // Добавляем обработчики для полей ввода (отправка по Enter)
+    if (nameInput) {
+      nameInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') saveName();
+      });
     }
-  });
-  
-  answerInput.addEventListener('keypress', function(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault(); // Предотвращаем перенос строки при обычном Enter
-      submitAnswer();
+    
+    if (questionInput) {
+      questionInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault(); // Предотвращаем перенос строки при обычном Enter
+          saveQuestion();
+        }
+      });
     }
-  });
-  
-  // Автоматически запускаем интеграцию с Telegram, если приложение открыто в Telegram
-  if (window.Telegram && window.Telegram.WebApp) {
-    initTelegramMiniApp();
+    
+    if (answerInput) {
+      answerInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault(); // Предотвращаем перенос строки при обычном Enter
+          submitAnswer();
+        }
+      });
+    }
+    
+    // Добавляем визуальный индикатор загрузки страницы
+    document.body.classList.add('app-loaded');
+    
+    // Автоматически запускаем интеграцию с Telegram, если приложение открыто в Telegram
+    try {
+      if (window.Telegram && window.Telegram.WebApp) {
+        initTelegramMiniApp();
+      }
+    } catch (telegramError) {
+      console.error('Ошибка инициализации Telegram WebApp:', telegramError);
+    }
+    
+    // Запускаем приложение
+    startApp();
+    console.log('Приложение успешно инициализировано');
+    
+  } catch (initError) {
+    console.error('Критическая ошибка при инициализации приложения:', initError);
+    alert('Произошла ошибка при загрузке приложения. Пожалуйста, перезагрузите страницу.');
   }
-  
-  // Запускаем приложение
-  startApp();
 });
 
 // Обработка ошибок для повышения стабильности работы
