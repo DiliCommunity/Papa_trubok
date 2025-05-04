@@ -63,8 +63,13 @@
                 
                 <div class="input-area">
                     <p>Придумай прикольное имя, которое увидят все участники:</p>
-                    <input type="text" id="nameInput" class="papyrus-input" placeholder="Твоё прикольное имя..." maxlength="20">
-                    <button id="submitNameBtn" class="papyrus-button shimmer">Сохранить имя</button>
+                    <div class="papyrus-scroll">
+                        <input type="text" id="nameInput" class="answer-input" placeholder="Твоё прикольное имя..." maxlength="20">
+                    </div>
+                    <div class="button-group">
+                        <button id="submitNameBtn" class="papyrus-button shimmer">Сохранить имя</button>
+                        <button id="backToStartBtn" class="papyrus-button shimmer back-button">Назад</button>
+                    </div>
                 </div>
             </div>
             
@@ -93,8 +98,13 @@
                 
                 <div class="input-area">
                     <p>Напиши вопрос, на который игроки будут отвечать:</p>
-                    <textarea id="questionInput" class="papyrus-input" placeholder="Твой вопрос..." rows="4"></textarea>
-                    <button id="submitQuestionBtn" class="papyrus-button shimmer">Создать игру</button>
+                    <div class="papyrus-scroll">
+                        <textarea id="questionInput" class="answer-input" placeholder="Твой вопрос..." rows="4"></textarea>
+                    </div>
+                    <div class="button-group">
+                        <button id="submitQuestionBtn" class="papyrus-button shimmer">Создать игру</button>
+                        <button id="backToMainFromQuestionBtn" class="papyrus-button shimmer back-button">Назад</button>
+                    </div>
                 </div>
             </div>
             
@@ -113,8 +123,13 @@
                 
                 <div class="input-area">
                     <p>Напиши самый смешной ответ, который придёт в голову:</p>
-                    <textarea id="answerInput" class="papyrus-input" placeholder="Твой смешной ответ..." rows="4"></textarea>
-                    <button id="submitAnswerBtn" class="papyrus-button shimmer">Отправить ответ</button>
+                    <div class="papyrus-scroll">
+                        <textarea id="answerInput" class="answer-input" placeholder="Твой смешной ответ..." rows="4"></textarea>
+                    </div>
+                    <div class="button-group">
+                        <button id="submitAnswerBtn" class="papyrus-button shimmer">Отправить ответ</button>
+                        <button id="backToMainFromAnswerBtn" class="papyrus-button shimmer back-button">Назад</button>
+                    </div>
                 </div>
             </div>
             
@@ -135,7 +150,10 @@
                     <h3>Выберите 2 самых смешных ответа (кроме своего):</h3>
                     <div id="answerOptions" class="answer-options"></div>
                     <p id="votingStatus" class="status-text"></p>
-                    <button id="submitVotesBtn" class="papyrus-button shimmer">Проголосовать</button>
+                    <div class="button-group">
+                        <button id="submitVotesBtn" class="papyrus-button shimmer">Проголосовать</button>
+                        <button id="backToMainFromVotingBtn" class="papyrus-button shimmer back-button">Назад</button>
+                    </div>
                 </div>
             </div>
             

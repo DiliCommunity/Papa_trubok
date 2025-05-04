@@ -6,7 +6,7 @@ const telegram = {
   initDataUnsafe: {
     user: {
       id: Math.floor(Math.random() * 1000000), // В реальном приложении это будет настоящий id
-      first_name: 'Пользователь',
+      first_name: '', // Убираем слово "Пользователь" по умолчанию
     }
   }
 };
@@ -20,6 +20,7 @@ let currentUser = {
   name: ''
 };
 let currentGame = null;
+let autoRefreshInterval = null; // Для автоматического обновления состояния игры
 
 // Элементы DOM
 const startScreen = document.getElementById('startScreen');
@@ -34,18 +35,56 @@ const nameInput = document.getElementById('nameInput');
 const questionInput = document.getElementById('questionInput');
 const answerInput = document.getElementById('answerInput');
 const gamesList = document.getElementById('gamesList');
-const questionText = document.getElementById('questionText');
+const answerQuestionText = document.getElementById('answerQuestionText');
+const votingQuestionText = document.getElementById('votingQuestionText');
+const resultsQuestionText = document.getElementById('resultsQuestionText');
 const answerOptions = document.getElementById('answerOptions');
 const resultsList = document.getElementById('resultsList');
+const votingStatus = document.getElementById('votingStatus');
+
+// История навигации для кнопки "Назад"
+let navigationHistory = [];
 
 // Функции управления экранами
-function showScreen(screen) {
+function showScreen(screen, addToHistory = true) {
+  // Если нужно добавить текущий экран в историю навигации
+  if (addToHistory) {
+    const currentScreen = [startScreen, nameScreen, gameScreen, questionScreen, answerScreen, votingScreen, resultsScreen]
+      .find(s => s.style.display === 'block');
+    
+    if (currentScreen && currentScreen !== screen) {
+      navigationHistory.push(currentScreen);
+    }
+  }
+  
   // Скрываем все экраны
   [startScreen, nameScreen, gameScreen, questionScreen, answerScreen, votingScreen, resultsScreen]
     .forEach(s => s.style.display = 'none');
   
   // Показываем нужный экран
   screen.style.display = 'block';
+  
+  // Очищаем поля ввода при переходе на экраны ввода
+  if (screen === nameScreen) {
+    nameInput.value = currentUser.name || '';
+    nameInput.focus();
+  } else if (screen === questionScreen) {
+    questionInput.value = '';
+    questionInput.focus();
+  } else if (screen === answerScreen) {
+    answerInput.value = '';
+    answerInput.focus();
+  }
+}
+
+// Функция для возврата на предыдущий экран
+function goBack() {
+  if (navigationHistory.length > 0) {
+    const previousScreen = navigationHistory.pop();
+    showScreen(previousScreen, false);
+  } else {
+    showScreen(startScreen, false);
+  }
 }
 
 // Первый вход - требование указать имя
@@ -63,12 +102,34 @@ function saveName() {
   
   currentUser.name = name;
   showMainMenu();
+  
+  // Запускаем автообновление только когда пользователь вошел в приложение
+  startAutoRefresh();
 }
 
 // Показ главного меню
 function showMainMenu() {
   showScreen(gameScreen);
   loadGames();
+}
+
+// Запуск автоматического обновления состояния
+function startAutoRefresh() {
+  if (autoRefreshInterval) {
+    clearInterval(autoRefreshInterval);
+  }
+  
+  // Регулярная проверка состояния игры
+  autoRefreshInterval = setInterval(() => {
+    if (currentGame) {
+      checkGameStatus();
+    } else {
+      // Если нет текущей игры, обновляем список доступных игр
+      if (gameScreen.style.display === 'block') {
+        loadGames();
+      }
+    }
+  }, 8000); // Обновление каждые 8 секунд
 }
 
 // Загрузка списка доступных игр
@@ -144,7 +205,8 @@ async function saveQuestion() {
       currentGame = {
         id: data.gameId,
         isCreator: true,
-        question: question
+        question: question,
+        status: 'waiting_players'
       };
       
       alert('Игра успешно создана! Ожидайте подключения участников.');
@@ -163,6 +225,13 @@ async function saveQuestion() {
 // Присоединение к игре
 async function joinGame(gameId) {
   try {
+    // Проверяем, что имя пользователя задано
+    if (!currentUser.name) {
+      alert('Сначала нужно задать имя!');
+      showScreen(nameScreen);
+      return;
+    }
+    
     const response = await fetch(`${API_URL}/games/${gameId}/join`, {
       method: 'POST',
       headers: {
@@ -180,7 +249,8 @@ async function joinGame(gameId) {
       currentGame = {
         id: gameId,
         isCreator: false,
-        question: data.question
+        question: data.question,
+        status: data.status || 'waiting_players'
       };
       
       if (data.question) {
@@ -200,8 +270,8 @@ async function joinGame(gameId) {
 
 // Показ экрана ответа на вопрос
 function showAnswerScreen(question) {
+  answerQuestionText.textContent = question;
   showScreen(answerScreen);
-  document.getElementById('answerQuestionText').textContent = question;
 }
 
 // Отправка ответа на вопрос
@@ -279,6 +349,7 @@ async function startVoting() {
     
     if (response.ok) {
       alert('Голосование успешно запущено!');
+      currentGame.status = 'voting';
       loadVotingOptions();
     } else {
       alert('Ошибка при запуске голосования: ' + (data.error || 'Неизвестная ошибка'));
@@ -302,12 +373,11 @@ async function loadVotingOptions() {
     const data = await response.json();
     
     if (data.answers && data.answers.length > 0) {
-      showScreen(votingScreen);
-      
-      document.getElementById('votingQuestionText').textContent = data.question;
+      votingQuestionText.textContent = data.question;
       
       // Очищаем старые варианты
       answerOptions.innerHTML = '';
+      selectedAnswers = []; // Сбрасываем выбранные ответы
       
       // Добавляем новые варианты
       data.answers.forEach(answer => {
@@ -324,7 +394,8 @@ async function loadVotingOptions() {
         answerOptions.appendChild(answerOption);
       });
       
-      document.getElementById('votingStatus').textContent = 'Выберите 2 самых смешных ответа (кроме своего)';
+      votingStatus.textContent = 'Выберите 2 самых смешных ответа (кроме своего)';
+      showScreen(votingScreen);
     } else {
       alert('Нет доступных вариантов для голосования.');
       showMainMenu();
@@ -358,7 +429,7 @@ function toggleVoteSelection(element) {
   }
   
   // Обновляем статус голосования
-  document.getElementById('votingStatus').textContent = 
+  votingStatus.textContent = 
     `Выбрано ${selectedAnswers.length} из 2 ответов`;
 }
 
@@ -387,6 +458,7 @@ async function submitVotes() {
       alert('Ваши голоса учтены!');
       
       if (data.resultsReady) {
+        currentGame.status = 'results';
         loadResults();
       } else {
         alert('Ожидайте, пока все участники проголосуют.');
@@ -413,9 +485,7 @@ async function loadResults() {
     
     const data = await response.json();
     
-    showScreen(resultsScreen);
-    
-    document.getElementById('resultsQuestionText').textContent = data.question;
+    resultsQuestionText.textContent = data.question;
     
     // Очищаем старые результаты
     resultsList.innerHTML = '';
@@ -439,43 +509,14 @@ async function loadResults() {
       
       resultsList.appendChild(resultItem);
     });
+    
+    showScreen(resultsScreen);
   } catch (error) {
     console.error('Ошибка загрузки результатов:', error);
     alert('Произошла ошибка при загрузке результатов: ' + error.message);
     showMainMenu();
   }
 }
-
-// Инициализация приложения при загрузке
-document.addEventListener('DOMContentLoaded', function() {
-  // Добавляем обработчики событий для кнопок
-  document.getElementById('submitNameBtn').addEventListener('click', saveName);
-  document.getElementById('createGameBtn').addEventListener('click', createNewGame);
-  document.getElementById('submitQuestionBtn').addEventListener('click', saveQuestion);
-  document.getElementById('submitAnswerBtn').addEventListener('click', submitAnswer);
-  document.getElementById('submitVotesBtn').addEventListener('click', submitVotes);
-  document.getElementById('backToMainBtn').addEventListener('click', showMainMenu);
-  document.getElementById('refreshGamesBtn').addEventListener('click', loadGames);
-  
-  // Добавляем обработчики для полей ввода (отправка по Enter)
-  nameInput.addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') saveName();
-  });
-  
-  questionInput.addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') saveQuestion();
-  });
-  
-  answerInput.addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') submitAnswer();
-  });
-  
-  // Автоматическая проверка обновлений состояния игры
-  setInterval(checkGameStatus, 10000); // Каждые 10 секунд
-  
-  // Запускаем приложение
-  startApp();
-});
 
 // Проверка статуса игры
 async function checkGameStatus() {
@@ -489,15 +530,14 @@ async function checkGameStatus() {
     
     // Если статус игры изменился, обновляем интерфейс
     if (game.status === 'voting' && currentGame.status !== 'voting') {
+      currentGame.status = 'voting';
       alert('Началось голосование!');
       loadVotingOptions();
     } else if (game.status === 'results' && currentGame.status !== 'results') {
+      currentGame.status = 'results';
       alert('Голосование завершено! Загружаем результаты...');
       loadResults();
     }
-    
-    // Обновляем локальное состояние
-    currentGame.status = game.status;
     
   } catch (error) {
     console.error('Ошибка при проверке статуса игры:', error);
@@ -524,16 +564,7 @@ function initTelegramMiniApp() {
     
     // Настраиваем кнопку "назад" для Telegram
     window.Telegram.WebApp.BackButton.onClick(() => {
-      // Логика возврата назад в зависимости от текущего экрана
-      if (questionScreen.style.display === 'block') {
-        showMainMenu();
-      } else if (answerScreen.style.display === 'block') {
-        showMainMenu();
-      } else if (votingScreen.style.display === 'block') {
-        showMainMenu();
-      } else {
-        window.Telegram.WebApp.close();
-      }
+      goBack();
     });
   }
 }
@@ -542,6 +573,7 @@ function initTelegramMiniApp() {
 function resetGame() {
   currentGame = null;
   selectedAnswers = [];
+  navigationHistory = [];
   
   // Очищаем поля ввода
   nameInput.value = '';
@@ -549,13 +581,53 @@ function resetGame() {
   answerInput.value = '';
   
   // Сбрасываем отображение
-  showScreen(startScreen);
+  showScreen(startScreen, false);
 }
 
-// Автоматически запускаем интеграцию с Telegram, если приложение открыто в Telegram
-if (window.Telegram && window.Telegram.WebApp) {
-  initTelegramMiniApp();
-}
+// Инициализация приложения при загрузке
+document.addEventListener('DOMContentLoaded', function() {
+  // Добавляем обработчики событий для всех кнопок
+  document.getElementById('submitNameBtn').addEventListener('click', saveName);
+  document.getElementById('createGameBtn').addEventListener('click', createNewGame);
+  document.getElementById('submitQuestionBtn').addEventListener('click', saveQuestion);
+  document.getElementById('submitAnswerBtn').addEventListener('click', submitAnswer);
+  document.getElementById('submitVotesBtn').addEventListener('click', submitVotes);
+  document.getElementById('backToMainBtn').addEventListener('click', showMainMenu);
+  document.getElementById('refreshGamesBtn').addEventListener('click', loadGames);
+  
+  // Добавляем обработчики для кнопок "Назад"
+  document.getElementById('backToStartBtn').addEventListener('click', goBack);
+  document.getElementById('backToMainFromQuestionBtn').addEventListener('click', goBack);
+  document.getElementById('backToMainFromAnswerBtn').addEventListener('click', goBack);
+  document.getElementById('backToMainFromVotingBtn').addEventListener('click', goBack);
+  
+  // Добавляем обработчики для полей ввода (отправка по Enter)
+  nameInput.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') saveName();
+  });
+  
+  questionInput.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault(); // Предотвращаем перенос строки при обычном Enter
+      saveQuestion();
+    }
+  });
+  
+  answerInput.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault(); // Предотвращаем перенос строки при обычном Enter
+      submitAnswer();
+    }
+  });
+  
+  // Автоматически запускаем интеграцию с Telegram, если приложение открыто в Telegram
+  if (window.Telegram && window.Telegram.WebApp) {
+    initTelegramMiniApp();
+  }
+  
+  // Запускаем приложение
+  startApp();
+});
 
 // Обработка ошибок для повышения стабильности работы
 window.addEventListener('error', function(event) {

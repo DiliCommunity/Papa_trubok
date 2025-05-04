@@ -250,7 +250,7 @@ h1::after {
     justify-content: center;
     flex-wrap: wrap;
     gap: 20px;
-    margin: 40px 0 20px;
+    margin: 20px 0;
     position: relative;
     z-index: 5;
 }
@@ -372,6 +372,7 @@ h1::after {
     padding: 2px;
     margin-bottom: 20px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    width: 100%;
 }
 
 .papyrus-scroll::before {
@@ -411,6 +412,7 @@ h1::after {
 .answer-input:focus {
     outline: none;
     background-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.3);
 }
 
 /* Стили для области голосования */
@@ -649,4 +651,20 @@ h1::after {
 .counter span {
     font-weight: bold;
     color: var(--accent-red);
+}
+
+/* Стили для кнопки "Назад" */
+.back-button {
+    background: linear-gradient(45deg, #9b6b31, #8a5a28, #7c4c21, #8a5a28);
+    background-size: 300% 300%;
+    color: #fff;
+    font-size: 16px;
+    padding: 12px 24px;
+    border-radius: 3px;
+    text-shadow: 1px 1px 1px rgba(0,0,0,0.3);
+}
+
+.back-button:hover {
+    background-position: 100% 50%;
+    transform: translateY(-2px);
 }
