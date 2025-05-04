@@ -27,6 +27,42 @@ let currentUser = {
 };
 let currentGame = null;
 
+// Функция для показа красивых уведомлений
+function showNotification(message, type = 'info') {
+  // Создаем элемент для уведомления
+  const notification = document.createElement('div');
+  notification.className = `papyrus-notification ${type}`;
+  
+  // Определяем иконки для разных типов уведомлений
+  let icon = '📜';
+  if (type === 'success') icon = '✅';
+  else if (type === 'error') icon = '❌';
+  else if (type === 'warning') icon = '⚠️';
+  
+  // Добавляем контент
+  notification.innerHTML = `
+    <div class="notification-icon">${icon}</div>
+    <div class="notification-message">${message}</div>
+    <div class="notification-close" onclick="this.parentNode.remove()">×</div>
+  `;
+  
+  // Добавляем на страницу
+  document.body.appendChild(notification);
+  
+  // Анимация появления
+  setTimeout(() => {
+    notification.style.transform = 'translateX(0)';
+    notification.style.opacity = '1';
+  }, 10);
+  
+  // Автоматическое закрытие через 5 секунд
+  setTimeout(() => {
+    notification.style.transform = 'translateX(400px)';
+    notification.style.opacity = '0';
+    setTimeout(() => notification.remove(), 500);
+  }, 5000);
+}
+
 // Простые функции для базовой работы
 function showScreen(screenId) {
   // Получаем все экраны
@@ -90,18 +126,20 @@ function saveName() {
   const nameInput = document.getElementById('nameInput');
   if (!nameInput) {
     console.error('Элемент ввода имени не найден!');
+    showNotification('Ошибка приложения. Попробуйте обновить страницу.', 'error');
     return;
   }
   
   const name = nameInput.value.trim();
   if (name.length < 3) {
-    alert('Имя должно содержать минимум 3 символа');
+    showNotification('Имя должно содержать минимум 3 символа', 'warning');
     return;
   }
   
   console.log(`Сохраняем имя: ${name}`);
   currentUser.name = name;
   showScreen('gameScreen');
+  showNotification(`Добро пожаловать, ${name}!`, 'success');
   
   // Реальная загрузка списка игр с сервера
   loadGames();
@@ -168,12 +206,13 @@ async function saveQuestion() {
   const questionInput = document.getElementById('questionInput');
   if (!questionInput) {
     console.error('Элемент ввода вопроса не найден!');
+    showNotification('Ошибка приложения. Попробуйте обновить страницу.', 'error');
     return;
   }
   
   const question = questionInput.value.trim();
   if (question.length < 5) {
-    alert('Вопрос должен содержать минимум 5 символов');
+    showNotification('Вопрос должен содержать минимум 5 символов', 'warning');
     return;
   }
   
@@ -204,16 +243,16 @@ async function saveQuestion() {
         status: 'waiting_players'
       };
       
-      alert('Игра успешно создана! Ожидайте подключения участников.');
+      showNotification('Игра успешно создана! Ожидайте подключения участников.', 'success');
       
       // Переходим в режим ответа на свой вопрос
       showAnswerScreen(question);
     } else {
-      alert('Ошибка при создании игры: ' + (data.error || 'Неизвестная ошибка'));
+      showNotification('Ошибка при создании игры: ' + (data.error || 'Неизвестная ошибка'), 'error');
     }
   } catch (error) {
     console.error('Ошибка создания игры:', error);
-    alert('Произошла ошибка при создании игры. Пожалуйста, попробуйте еще раз.');
+    showNotification('Произошла ошибка при создании игры. Пожалуйста, попробуйте еще раз.', 'error');
   }
 }
 
@@ -229,7 +268,7 @@ function showAnswerScreen(question) {
 // Присоединение к игре
 async function joinGame(gameId) {
   if (!currentUser.name) {
-    alert('Сначала нужно задать имя!');
+    showNotification('Сначала нужно задать имя!', 'warning');
     showScreen('nameScreen');
     return;
   }
@@ -259,34 +298,45 @@ async function joinGame(gameId) {
       status: data.status || 'waiting_players'
     };
     
+    console.log(`Присоединились к игре, статус: ${currentGame.status}, вопрос: ${currentGame.question ? 'есть' : 'нет'}`);
+    
     if (data.question) {
-      showAnswerScreen(data.question);
+      if (currentGame.status === 'collecting_answers' || currentGame.status === 'waiting_players') {
+        showAnswerScreen(data.question);
+      } else if (currentGame.status === 'voting') {
+        showNotification('В этой игре уже идет голосование!', 'info');
+        loadVotingOptions();
+      } else if (currentGame.status === 'results') {
+        showNotification('Эта игра уже завершена. Вы можете посмотреть результаты.', 'info');
+        loadResults();
+      }
     } else {
-      alert('Вы присоединились к игре! Ожидайте, пока создатель выберет вопрос.');
+      showNotification('Вы присоединились к игре! Ожидайте, пока создатель выберет вопрос.', 'success');
       showScreen('gameScreen');
     }
   } catch (error) {
     console.error('Ошибка присоединения к игре:', error);
-    alert('Произошла ошибка при присоединении к игре. Пожалуйста, попробуйте еще раз.');
+    showNotification('Произошла ошибка при присоединении к игре. Пожалуйста, попробуйте еще раз.', 'error');
   }
 }
 
 // Отправка ответа на вопрос
 async function submitAnswer() {
   if (!currentGame || !currentGame.id) {
-    alert('Ошибка: информация об игре отсутствует');
+    showNotification('Ошибка: информация об игре отсутствует', 'error');
     return;
   }
   
   const answerInput = document.getElementById('answerInput');
   if (!answerInput) {
     console.error('Элемент ввода ответа не найден!');
+    showNotification('Произошла ошибка. Попробуйте обновить страницу.', 'error');
     return;
   }
   
   const answer = answerInput.value.trim();
   if (answer.length < 1) {
-    alert('Введите ваш ответ');
+    showNotification('Пожалуйста, введите ваш ответ', 'warning');
     return;
   }
   
@@ -308,7 +358,7 @@ async function submitAnswer() {
     
     const data = await response.json();
     
-    alert(`Ваш ответ принят! Осталось ответов до голосования: ${data.remainingToVoting}`);
+    showNotification(`Ваш ответ принят! Осталось ответов до голосования: ${data.remainingToVoting}`, 'success');
     
     // Если это создатель игры, показываем ему доп. опции
     if (currentGame.isCreator) {
@@ -318,7 +368,7 @@ async function submitAnswer() {
     }
   } catch (error) {
     console.error('Ошибка отправки ответа:', error);
-    alert('Произошла ошибка при отправке ответа. Пожалуйста, попробуйте еще раз.');
+    showNotification('Произошла ошибка при отправке ответа. Пожалуйста, попробуйте еще раз.', 'error');
   }
 }
 
@@ -341,7 +391,7 @@ function showCreatorOptions() {
 // Запуск голосования
 async function startVoting() {
   if (!currentGame || !currentGame.id || !currentGame.isCreator) {
-    alert('Только создатель игры может начать голосование');
+    showNotification('Только создатель игры может начать голосование', 'warning');
     return;
   }
   
@@ -362,12 +412,12 @@ async function startVoting() {
     
     const data = await response.json();
     
-    alert('Голосование успешно запущено!');
+    showNotification('Голосование успешно запущено!', 'success');
     currentGame.status = 'voting';
     loadVotingOptions();
   } catch (error) {
     console.error('Ошибка запуска голосования:', error);
-    alert('Произошла ошибка при запуске голосования. Пожалуйста, попробуйте еще раз.');
+    showNotification('Произошла ошибка при запуске голосования. Пожалуйста, попробуйте еще раз.', 'error');
   }
 }
 
@@ -494,12 +544,12 @@ async function loadVotingOptions() {
       
       showScreen('votingScreen');
     } else {
-      alert('Нет доступных вариантов для голосования.');
+      showNotification('Нет доступных вариантов для голосования.', 'warning');
       showScreen('gameScreen');
     }
   } catch (error) {
     console.error('Ошибка загрузки вариантов:', error);
-    alert('Произошла ошибка при загрузке вариантов для голосования: ' + error.message);
+    showNotification('Произошла ошибка при загрузке вариантов для голосования: ' + error.message, 'error');
     showScreen('gameScreen');
   }
 }
@@ -520,7 +570,7 @@ function toggleVoteSelection(element) {
       element.classList.add('selected');
       selectedAnswers.push(answerId);
     } else {
-      alert('Вы можете выбрать максимум 2 ответа');
+      showNotification('Вы можете выбрать максимум 2 ответа', 'warning');
       return;
     }
   }
@@ -535,12 +585,12 @@ function toggleVoteSelection(element) {
 // Отправка голосов
 async function submitVotes() {
   if (!currentGame || !currentGame.id) {
-    alert('Информация об игре отсутствует');
+    showNotification('Информация об игре отсутствует', 'error');
     return;
   }
   
   if (selectedAnswers.length === 0) {
-    alert('Выберите хотя бы один ответ');
+    showNotification('Выберите хотя бы один ответ', 'warning');
     return;
   }
   
@@ -562,18 +612,18 @@ async function submitVotes() {
     
     const data = await response.json();
     
-    alert('Ваши голоса учтены!');
+    showNotification('Ваши голоса учтены!', 'success');
     
     if (data.resultsReady) {
       currentGame.status = 'results';
       loadResults();
     } else {
-      alert('Ожидайте, пока все участники проголосуют.');
+      showNotification('Ожидайте, пока все участники проголосуют.', 'info');
       showScreen('gameScreen');
     }
   } catch (error) {
     console.error('Ошибка отправки голосов:', error);
-    alert('Произошла ошибка при отправке голосов. Пожалуйста, попробуйте еще раз.');
+    showNotification('Произошла ошибка при отправке голосов. Пожалуйста, попробуйте еще раз.', 'error');
   }
 }
 
@@ -630,7 +680,7 @@ async function loadResults() {
     showScreen('resultsScreen');
   } catch (error) {
     console.error('Ошибка загрузки результатов:', error);
-    alert('Произошла ошибка при загрузке результатов: ' + error.message);
+    showNotification('Произошла ошибка при загрузке результатов: ' + error.message, 'error');
     showScreen('gameScreen');
   }
 }
