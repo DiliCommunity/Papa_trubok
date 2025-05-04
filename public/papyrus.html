@@ -5,6 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PapaTrubok - Игра Смешных Вопросов</title>
     <link rel="stylesheet" href="main.css">
+    <!-- Скрипт для диагностики и отлова ошибок JavaScript -->
+    <script type="text/javascript">
+      window.onerror = function(message, source, lineno, colno, error) {
+        console.error("Ошибка JavaScript:", message, "в", source, "строка:", lineno);
+        
+        // Добавим видимое сообщение об ошибке на странице
+        const errorDiv = document.createElement('div');
+        errorDiv.style.position = 'fixed';
+        errorDiv.style.top = '10px';
+        errorDiv.style.left = '10px';
+        errorDiv.style.right = '10px';
+        errorDiv.style.backgroundColor = 'rgba(255, 0, 0, 0.8)';
+        errorDiv.style.color = 'white';
+        errorDiv.style.padding = '10px';
+        errorDiv.style.zIndex = '9999';
+        errorDiv.style.borderRadius = '5px';
+        errorDiv.innerHTML = `<strong>Ошибка JavaScript:</strong> ${message}<br>Файл: ${source}<br>Строка: ${lineno}`;
+        
+        document.body.appendChild(errorDiv);
+        return true; // Предотвращаем стандартное сообщение об ошибке браузера
+      };
+    </script>
 </head>
 <body>
     <div class="container">
@@ -27,8 +49,16 @@
             <div class="scarab bottom-left">𓆣</div>
             <div class="scarab bottom-right">𓆣</div>
             
+            <!-- Диагностическая панель -->
+            <div id="debugPanel" style="position: fixed; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); color: white; padding: 10px; z-index: 10000; display: none;">
+                <button onclick="this.parentNode.style.display='none'">Закрыть</button>
+                <button onclick="clearAllData()">Сбросить данные</button>
+                <button onclick="toggleScreens()">Показать все экраны</button>
+                <div id="debugInfo"></div>
+            </div>
+            
             <!-- Экран запуска -->
-            <div id="startScreen" style="display: none;">
+            <div id="startScreen" style="display: block;">
                 <div class="title">
                     <h1>PapaTrubok</h1>
                     <p>Древнеегипетский свиток смешных вопросов</p>
@@ -52,6 +82,7 @@
                 
                 <div class="button-group">
                     <button class="papyrus-button shimmer" onclick="startApp()">Начать игру</button>
+                    <button class="papyrus-button" onclick="document.getElementById('debugPanel').style.display='block'">Debug</button>
                 </div>
             </div>
             
@@ -179,6 +210,116 @@
         </div>
     </div>
 
+    <!-- Встроенный скрипт диагностики -->
+    <script>
+        // Полифилл для IE
+        if (!window.location.origin) {
+          window.location.origin = window.location.protocol + "//" + window.location.hostname + (window.location.port ? ':' + window.location.port: '');
+        }
+        
+        // Функция для очистки данных
+        function clearAllData() {
+            try {
+                localStorage.clear();
+                sessionStorage.clear();
+                console.log('Данные очищены');
+                alert('Локальные данные очищены');
+            } catch(e) {
+                console.error('Ошибка при очистке данных:', e);
+            }
+        }
+        
+        // Функция переключения отображения экранов для отладки
+        function toggleScreens() {
+            const screens = document.querySelectorAll('#startScreen, #nameScreen, #gameScreen, #questionScreen, #answerScreen, #votingScreen, #resultsScreen');
+            const visibleScreens = Array.from(screens).filter(s => s.style.display !== 'none');
+            
+            if (visibleScreens.length === screens.length) {
+                // Если показаны все экраны, оставляем только стартовый
+                screens.forEach(s => s.style.display = 'none');
+                document.getElementById('startScreen').style.display = 'block';
+            } else {
+                // Иначе показываем все
+                screens.forEach(s => s.style.display = 'block');
+            }
+        }
+        
+        // Перехватываем console.error для отображения в панели
+        const originalConsoleError = console.error;
+        console.error = function() {
+            originalConsoleError.apply(console, arguments);
+            const debugInfo = document.getElementById('debugInfo');
+            if (debugInfo) {
+                const errorMsg = Array.from(arguments).join(' ');
+                const errorDiv = document.createElement('div');
+                errorDiv.style.color = 'red';
+                errorDiv.style.margin = '5px 0';
+                errorDiv.textContent = `ERROR: ${errorMsg}`;
+                debugInfo.appendChild(errorDiv);
+            }
+        };
+        
+        // Перехватываем console.log для отображения в панели
+        const originalConsoleLog = console.log;
+        console.log = function() {
+            originalConsoleLog.apply(console, arguments);
+            const debugInfo = document.getElementById('debugInfo');
+            if (debugInfo) {
+                const logMsg = Array.from(arguments).join(' ');
+                const logDiv = document.createElement('div');
+                logDiv.style.color = 'lightgreen';
+                logDiv.style.margin = '2px 0';
+                logDiv.textContent = `LOG: ${logMsg}`;
+                debugInfo.appendChild(logDiv);
+            }
+        };
+        
+        // Простые замены функций для диагностики
+        if (!window.startAppOriginal) {
+            window.startAppOriginal = window.startApp;
+            window.startApp = function() {
+                console.log('ВЫЗОВ: startApp()');
+                try {
+                    if (window.startAppOriginal) {
+                        return window.startAppOriginal();
+                    } else {
+                        const nameScreen = document.getElementById('nameScreen');
+                        if (nameScreen) {
+                            document.getElementById('startScreen').style.display = 'none';
+                            nameScreen.style.display = 'block';
+                            console.log('Показан экран ввода имени');
+                        } else {
+                            console.error('Экран ввода имени не найден');
+                        }
+                    }
+                } catch (e) {
+                    console.error('Ошибка в startApp:', e);
+                }
+            };
+        }
+        
+        // Диагностика загрузки
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Страница загружена, запускаем диагностику...');
+            
+            // Проверяем наличие элементов
+            const elements = [
+                'startScreen', 'nameScreen', 'gameScreen', 'questionScreen', 
+                'answerScreen', 'votingScreen', 'resultsScreen', 'nameInput', 
+                'submitNameBtn'
+            ];
+            
+            elements.forEach(id => {
+                const el = document.getElementById(id);
+                console.log(`Элемент #${id}: ${el ? 'НАЙДЕН' : 'НЕ НАЙДЕН'}`);
+            });
+            
+            // Проверяем загрузку скрипта
+            console.log(`Скрипт papyrus.js ${typeof window.startAppOriginal !== 'undefined' ? 'загружен' : 'НЕ загружен'}`);
+        });
+    </script>
+    
+    <!-- Основной скрипт приложения -->
     <script src="papyrus.js"></script>
 </body>
 </html> 
