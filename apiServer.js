@@ -12,6 +12,10 @@ const fs = require('fs');
 // Загружаем переменные окружения
 dotenv.config();
 
+// Переменная окружения для определения среды
+process.env.NODE_ENV = process.env.NODE_ENV || 'development';
+console.log(`Запуск в режиме: ${process.env.NODE_ENV}`);
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -39,6 +43,23 @@ bot.use(stage.middleware());
 
 // --- КОНСТАНТЫ И ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 const MAX_ANSWERS = 10;
+
+// Функция для правильного завершения игры
+function finishGame(gameId) {
+  const games = gameManager.getGames();
+  const game = games[gameId];
+  
+  if (!game) return;
+  
+  // Игра завершена, но оставляем для просмотра результатов
+  game.active = false;
+  game.status = 'results';
+  
+  // Сохраняем
+  gameManager.setGame(gameId, game);
+  
+  console.log(`Игра ${gameId} завершена, результаты доступны`);
+}
 
 function createStyledMessage(title, content, emoji = '📝') {
   return `<b>🔸🔹🔸 ${emoji} ${title} ${emoji} 🔸🔹🔸</b>\n\n${content}`;
@@ -68,8 +89,14 @@ bot.command('start', async (ctx) => {
 // Получить доступные игры
 app.get('/api/games', (req, res) => {
   const games = gameManager.getGames();
+  console.log('Всего игр в системе:', Object.keys(games).length); // Отладка
+  
   const activeGames = Object.entries(games)
-    .filter(([id, game]) => game.active && (game.status === 'waiting_players' || game.status === 'collecting_answers'))
+    .filter(([id, game]) => {
+      console.log(`Игра ${id}:`, game.active, game.status); // Отладка
+      return game.active && 
+            (game.status === 'waiting_players' || game.status === 'collecting_answers');
+    })
     .map(([id, game]) => ({
       id,
       name: game.initiatorName,
@@ -78,6 +105,7 @@ app.get('/api/games', (req, res) => {
       status: game.status
     }));
   
+  console.log('Активные игры:', activeGames.length); // Отладка
   res.json(activeGames);
 });
 
@@ -110,6 +138,8 @@ app.post('/api/games', (req, res) => {
     return res.status(400).json({ error: 'Не хватает данных' });
   }
   
+  console.log(`Создание игры от ${userName} (${userId}): "${question}"`);
+  
   // Сохраняем пользователя
   userManager.setUser(userId, { funnyName: userName });
   
@@ -138,6 +168,8 @@ app.post('/api/games', (req, res) => {
   };
   
   gameManager.setGame(gameId, newGame);
+  
+  console.log(`Игра ${gameId} успешно создана. Статус: ${newGame.status}, active: ${newGame.active}`);
   
   res.status(201).json({ gameId, status: 'success' });
 });
@@ -463,6 +495,9 @@ function calculateResults(gameId) {
   });
   
   gameManager.setGame(gameId, game);
+  
+  // Планируем завершение игры через 30 минут
+  setTimeout(() => finishGame(gameId), 30 * 60 * 1000);
 }
 
 // Функция уведомления о результатах
@@ -573,4 +608,42 @@ process.once('SIGTERM', () => bot.stop('SIGTERM'));
 app.listen(PORT, () => {
   console.log(`API сервер запущен на порту ${PORT}`);
   console.log(`Веб-интерфейс доступен по адресу http://localhost:${PORT}/`);
+});
+
+// Диагностические эндпоинты
+app.get('/api/debug/games', (req, res) => {
+  const games = gameManager.getGames();
+  
+  // Для безопасности возвращаем только общую информацию
+  const summary = Object.entries(games).map(([id, game]) => ({
+    id,
+    active: game.active,
+    status: game.status,
+    participants: game.participants?.length || 0,
+    hasQuestion: !!game.currentQuestion,
+    answers: Object.keys(game.answers || {}).length,
+    votes: Object.keys(game.votes || {}).length,
+    createdAt: game.createdAt
+  }));
+  
+  res.json({
+    totalGames: Object.keys(games).length,
+    activeGames: summary.filter(g => g.active).length,
+    games: summary
+  });
+});
+
+app.get('/api/debug/users', (req, res) => {
+  const users = userManager.getUsers();
+  
+  // Для безопасности возвращаем только общую информацию
+  const summary = Object.entries(users).map(([id, user]) => ({
+    id,
+    funnyName: user.funnyName
+  }));
+  
+  res.json({
+    totalUsers: Object.keys(users).length,
+    users: summary
+  });
 }); 

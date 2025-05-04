@@ -1,25 +1,53 @@
 const fs = require('fs');
-const GAMES_FILE = 'games.json';
+const path = require('path');
+
+// Определяем папку для данных
+const DATA_DIR = process.env.NODE_ENV === 'production' 
+  ? '/tmp' 
+  : path.join(__dirname);
+
+const GAMES_FILE = path.join(DATA_DIR, 'games.json');
 
 let games = {};
+let lastSaveTime = 0;
+const SAVE_DEBOUNCE = 5000; // 5 секунд
 
 // Загрузка игр из файла
 function loadGames() {
+  console.log(`Загрузка игр из ${GAMES_FILE}`);
   if (fs.existsSync(GAMES_FILE)) {
     try {
       const data = fs.readFileSync(GAMES_FILE, 'utf8');
       games = data && data.trim() ? JSON.parse(data) : {};
+      console.log(`Загружено ${Object.keys(games).length} игр`);
     } catch (error) {
       console.error('Ошибка загрузки игр:', error);
       games = {};
     }
+  } else {
+    console.log('Файл с играми не найден, создаем новый');
+    saveGames(); // Создаем пустой файл
   }
 }
 
 // Сохранение игр в файл
 function saveGames() {
   try {
-    console.log(`Сохраняем ${Object.keys(games).length} игр в файл...`); // Для отладки
+    const now = Date.now();
+    if (now - lastSaveTime < SAVE_DEBOUNCE) {
+      // Дебаунс для защиты от слишком частых сохранений
+      return;
+    }
+    
+    lastSaveTime = now;
+    console.log(`Сохраняем ${Object.keys(games).length} игр в файл ${GAMES_FILE}...`);
+    
+    // Убедимся, что директория существует
+    const dir = path.dirname(GAMES_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    
     fs.writeFileSync(GAMES_FILE, JSON.stringify(games, null, 2), 'utf8');
     console.log('Игры сохранены успешно');
   } catch (error) {
@@ -29,10 +57,6 @@ function saveGames() {
 
 // Получить все игры
 function getGames() {
-  // Загружаем актуальные данные перед каждым запросом, если нужно
-  // Это иногда может помочь с синхронизацией, но может быть ресурсоемким
-  // Раскомментируйте, если возникают проблемы с синхронизацией
-  // loadGames(); 
   return games;
 }
 
@@ -81,6 +105,9 @@ function cleanupOldGames(maxAgeInHours = 24) {
   
   return cleaned;
 }
+
+// Автосохранение каждую минуту
+setInterval(saveGames, 60000);
 
 module.exports = {
   loadGames,
