@@ -9,10 +9,11 @@ if (!window.Telegram || !window.Telegram.WebApp) {
   console.log("Telegram WebApp не обнаружен, создаем заглушку для локального тестирования");
   window.Telegram = {
     WebApp: {
-      initDataUnsafe: {
-        user: {
+  initDataUnsafe: {
+    user: {
           id: Math.floor(Math.random() * 1000000),
           first_name: '',
+          username: '',
         }
       },
       BackButton: {
@@ -38,7 +39,8 @@ if (!window.Telegram || !window.Telegram.WebApp) {
 // Глобальные переменные
 let currentUser = {
   id: getTelegramUserId(),
-  name: ''
+  name: '',
+  anonymous: false
 };
 let currentGame = null;
 let navigationHistory = []; // История навигации для кнопки "Назад"
@@ -50,6 +52,19 @@ function getTelegramUserId() {
     return window.Telegram.WebApp.initDataUnsafe.user.id || Math.floor(Math.random() * 1000000);
   }
   return Math.floor(Math.random() * 1000000);
+}
+
+// Получение имени пользователя из Telegram
+function getTelegramUserName() {
+  if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
+    const user = window.Telegram.WebApp.initDataUnsafe.user;
+    if (user.username) return user.username;
+    if (user.first_name) {
+      if (user.last_name) return `${user.first_name} ${user.last_name}`;
+      return user.first_name;
+    }
+  }
+  return '';
 }
 
 // Функция для показа красивых уведомлений
@@ -157,13 +172,13 @@ function showScreen(screenId) {
     
     // Фокус на поля ввода
     if (screenId === 'nameScreen') {
-      const nameInput = document.getElementById('nameInput');
+const nameInput = document.getElementById('nameInput');
       if (nameInput) nameInput.focus();
     } else if (screenId === 'questionScreen') {
-      const questionInput = document.getElementById('questionInput');
+const questionInput = document.getElementById('questionInput');
       if (questionInput) questionInput.focus();
     } else if (screenId === 'answerScreen') {
-      const answerInput = document.getElementById('answerInput');
+const answerInput = document.getElementById('answerInput');
       if (answerInput) answerInput.focus();
     }
   } else {
@@ -224,10 +239,23 @@ window.startApp = function() {
     // Обработчик уже устанавливается в DOMContentLoaded, не дублируем его здесь
   }
   
-  showScreen('nameScreen');
+  // Проверяем, есть ли у пользователя сохраненные имена или данные Telegram
+  const telegramName = getTelegramUserName();
+  const savedNames = getSavedNames();
   
-  // Показываем главный выбор имен при загрузке экрана
-  showNameChoiceOptions();
+  if (savedNames.length > 0) {
+    // Если есть сохраненные имена, показываем экран выбора
+    showScreen('nameScreen');
+    showNameChoiceOptions();
+  } else if (telegramName) {
+    // Если есть имя из Telegram, предлагаем его использовать
+    showScreen('nameScreen');
+    showTelegramNameOption();
+  } else {
+    // Если нет ни сохраненных имен, ни данных Telegram, показываем форму для нового имени
+    showScreen('nameScreen');
+    showNewNameForm();
+  }
 };
 
 // Обработчики для отслеживания состояния клавиатуры
@@ -282,7 +310,80 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }
   }
+  
+  // Добавляем кнопки для анонимной регистрации
+  setupAnonymousRegistration();
 });
+
+// Настраиваем интерфейс для анонимной регистрации
+function setupAnonymousRegistration() {
+  const newNameSection = document.getElementById('newNameSection');
+  if (newNameSection) {
+    // Добавляем чекбокс для анонимной регистрации
+    const anonymousCheckbox = document.createElement('div');
+    anonymousCheckbox.className = 'anonymous-checkbox';
+    anonymousCheckbox.innerHTML = `
+      <label for="anonymousCheck">
+        <input type="checkbox" id="anonymousCheck"> 
+        Участвовать анонимно (другие игроки не увидят ваше имя)
+      </label>
+    `;
+    newNameSection.appendChild(anonymousCheckbox);
+    
+    // Добавляем обработчик для чекбокса
+    const checkbox = document.getElementById('anonymousCheck');
+    if (checkbox) {
+      checkbox.addEventListener('change', function(e) {
+        currentUser.anonymous = e.target.checked;
+      });
+    }
+  }
+}
+
+// Функция для отображения опции использования имени из Telegram
+function showTelegramNameOption() {
+  const telegramName = getTelegramUserName();
+  
+  // Скрываем все секции ввода имени
+  const sections = ['newNameSection', 'existingNameSection'];
+  sections.forEach(id => {
+    const section = document.getElementById(id);
+    if (section) section.style.display = 'none';
+  });
+  
+  // Показываем главные кнопки выбора
+  const choiceButtons = document.getElementById('nameChoiceButtons');
+  if (choiceButtons) {
+    // Создаем HTML для кнопок
+    choiceButtons.innerHTML = `
+      <button id="useTelegramNameBtn" class="papyrus-button shimmer">Использовать имя из Telegram: ${telegramName}</button>
+      <button id="newNameBtn" class="papyrus-button shimmer">Придумать другое имя</button>
+      <button id="existingNameBtn" class="papyrus-button shimmer ${getSavedNames().length ? '' : 'disabled'}" ${getSavedNames().length ? '' : 'disabled'}>Использовать сохранённое имя</button>
+    `;
+    choiceButtons.style.display = 'block';
+    
+    // Добавляем обработчики для кнопок
+    document.getElementById('useTelegramNameBtn').addEventListener('click', function() {
+      currentUser.name = telegramName;
+      currentUser.anonymous = false; // Имя из Telegram не анонимное
+      showScreen('gameScreen');
+      showNotification(`Используем имя: ${telegramName}`, 'success');
+      loadGames();
+    });
+    
+    document.getElementById('newNameBtn').addEventListener('click', showNewNameForm);
+    
+    const existingNameBtn = document.getElementById('existingNameBtn');
+    existingNameBtn.addEventListener('click', showExistingNames);
+    
+    // Отключаем кнопку, если нет сохраненных имен
+    if (getSavedNames().length === 0) {
+      existingNameBtn.classList.add('disabled');
+      existingNameBtn.style.opacity = '0.5';
+      existingNameBtn.title = 'Нет сохраненных имен';
+    }
+  }
+}
 
 // Функция для отображения опций выбора имени
 function showNameChoiceOptions() {
@@ -293,9 +394,41 @@ function showNameChoiceOptions() {
     if (section) section.style.display = 'none';
   });
   
+  // Проверяем, есть ли имя из Telegram
+  const telegramName = getTelegramUserName();
+  
   // Показываем главные кнопки выбора
   const choiceButtons = document.getElementById('nameChoiceButtons');
-  if (choiceButtons) choiceButtons.style.display = 'block';
+  if (choiceButtons) {
+    // Создаем HTML для кнопок, включая опцию имени из Telegram, если доступно
+    let buttonHtml = '';
+    
+    if (telegramName) {
+      buttonHtml += `<button id="useTelegramNameBtn" class="papyrus-button shimmer">Использовать имя из Telegram: ${telegramName}</button>`;
+    }
+    
+    buttonHtml += `
+      <button id="newNameBtn" class="papyrus-button shimmer">Новое имя</button>
+      <button id="existingNameBtn" class="papyrus-button shimmer">Использовать сохранённое имя</button>
+    `;
+    
+    choiceButtons.innerHTML = buttonHtml;
+    choiceButtons.style.display = 'block';
+    
+    // Добавляем обработчики для кнопок
+    if (telegramName) {
+      document.getElementById('useTelegramNameBtn').addEventListener('click', function() {
+        currentUser.name = telegramName;
+        currentUser.anonymous = false; // Имя из Telegram не анонимное
+        showScreen('gameScreen');
+        showNotification(`Используем имя: ${telegramName}`, 'success');
+        loadGames();
+      });
+    }
+    
+    document.getElementById('newNameBtn').addEventListener('click', showNewNameForm);
+    document.getElementById('existingNameBtn').addEventListener('click', showExistingNames);
+  }
   
   // Проверяем, есть ли сохраненные имена
   const savedNames = getSavedNames();
@@ -359,11 +492,14 @@ function showExistingNames() {
   const savedNamesList = document.getElementById('savedNamesList');
   if (savedNamesList) {
     let html = '';
-    savedNames.forEach(name => {
+    savedNames.forEach((nameData) => {
       html += `
         <div class="game-item">
-          <h3>${name}</h3>
-          <button class="papyrus-button shimmer" onclick="selectExistingName('${name}')">Выбрать</button>
+          <h3>${nameData.name} ${nameData.anonymous ? '(анонимно)' : ''}</h3>
+          <div class="button-group">
+            <button class="papyrus-button shimmer" onclick="selectExistingName('${nameData.name}', ${nameData.anonymous})">Выбрать</button>
+            <button class="papyrus-button shimmer" onclick="deleteExistingName('${nameData.name}')">Удалить</button>
+          </div>
         </div>
       `;
     });
@@ -372,9 +508,10 @@ function showExistingNames() {
 }
 
 // Функция для выбора существующего имени
-function selectExistingName(name) {
-  console.log(`Выбрано имя: ${name}`);
+function selectExistingName(name, anonymous = false) {
+  console.log(`Выбрано имя: ${name}, анонимно: ${anonymous}`);
   currentUser.name = name;
+  currentUser.anonymous = anonymous;
   showScreen('gameScreen');
   showNotification(`Добро пожаловать, ${name}!`, 'success');
   
@@ -382,10 +519,30 @@ function selectExistingName(name) {
   loadGames();
 }
 
-// Получение сохраненных имен из localStorage
+// Функция для удаления существующего имени
+function deleteExistingName(name) {
+  const savedNames = getSavedNames();
+  const updatedNames = savedNames.filter(nameData => nameData.name !== name);
+  saveNamesToStorage(updatedNames);
+  
+  showNotification(`Имя ${name} удалено`, 'success');
+  
+  // Перезагружаем список имен
+  showExistingNames();
+  
+  // Если больше нет имен, показываем форму нового имени
+  if (updatedNames.length === 0) {
+    showNewNameForm();
+  }
+}
+
+// Получение сохраненных имен из localStorage для текущего пользователя
 function getSavedNames() {
-  // Получаем имена из локального хранилища
-  let savedNames = localStorage.getItem('papaTrubokSavedNames');
+  // Получаем уникальный ключ для текущего пользователя Telegram
+  const userId = getTelegramUserId();
+  const storageKey = `papaTrubokSavedNames_${userId}`;
+  
+  let savedNames = localStorage.getItem(storageKey);
   
   if (savedNames) {
     try {
@@ -401,10 +558,14 @@ function getSavedNames() {
   return [];
 }
 
-// Сохранение имен в localStorage
+// Сохранение имен в localStorage для текущего пользователя
 function saveNamesToStorage(names) {
+  // Получаем уникальный ключ для текущего пользователя Telegram
+  const userId = getTelegramUserId();
+  const storageKey = `papaTrubokSavedNames_${userId}`;
+  
   if (Array.isArray(names)) {
-    localStorage.setItem('papaTrubokSavedNames', JSON.stringify(names));
+    localStorage.setItem(storageKey, JSON.stringify(names));
   }
 }
 
@@ -423,15 +584,27 @@ function saveName() {
     return;
   }
   
-  console.log(`Сохраняем имя: ${name}`);
+  // Проверяем состояние чекбокса анонимности
+  const anonymousCheck = document.getElementById('anonymousCheck');
+  const anonymous = anonymousCheck ? anonymousCheck.checked : false;
+  
+  console.log(`Сохраняем имя: ${name}, анонимно: ${anonymous}`);
   currentUser.name = name;
+  currentUser.anonymous = anonymous;
   
   // Сохраняем имя в локальное хранилище
   const savedNames = getSavedNames();
-  if (!savedNames.includes(name)) {
-    savedNames.push(name);
-    saveNamesToStorage(savedNames);
+  const existingNameIndex = savedNames.findIndex(nameData => nameData.name === name);
+  
+  if (existingNameIndex !== -1) {
+    // Обновляем существующее имя
+    savedNames[existingNameIndex].anonymous = anonymous;
+  } else {
+    // Добавляем новое имя
+    savedNames.push({ name, anonymous });
   }
+  
+  saveNamesToStorage(savedNames);
   
   showScreen('gameScreen');
   showNotification(`Добро пожаловать, ${name}!`, 'success');
@@ -464,10 +637,10 @@ async function loadGames() {
     games.forEach(game => {
       html += `
         <div class="game-item">
-          <h3>Комната: ${game.name}</h3>
-          <p>Участников: ${game.count}/10</p>
-          <p>Статус: ${getStatusText(game.status)}</p>
-          <button class="papyrus-button shimmer" onclick="joinGame('${game.id}')">Присоединиться</button>
+        <h3>Комната: ${game.name}</h3>
+        <p>Участников: ${game.count}/10</p>
+        <p>Статус: ${getStatusText(game.status)}</p>
+        <button class="papyrus-button shimmer" onclick="joinGame('${game.id}')">Присоединиться</button>
         </div>
       `;
     });
@@ -551,13 +724,31 @@ async function saveQuestion() {
   }
 }
 
-// Показ экрана ответа на вопрос
+// Функция для показа экрана ответа на вопрос
 function showAnswerScreen(question) {
   const answerQuestionText = document.getElementById('answerQuestionText');
   if (answerQuestionText) {
     answerQuestionText.textContent = question;
   }
+  
+  // Обновляем статус анонимности
+  updateAnonymousStatus();
+  
   showScreen('answerScreen');
+}
+
+// Обновляем отображение статуса анонимности
+function updateAnonymousStatus() {
+  const anonymousStatus = document.getElementById('anonymousStatus');
+  if (anonymousStatus) {
+    if (currentUser.anonymous) {
+      anonymousStatus.textContent = 'Ваш ответ будет анонимным';
+      anonymousStatus.className = 'anonymous';
+    } else {
+      anonymousStatus.textContent = 'Участники будут видеть ваше имя';
+      anonymousStatus.className = '';
+    }
+  }
 }
 
 // Присоединение к игре
@@ -576,7 +767,8 @@ async function joinGame(gameId) {
       },
       body: JSON.stringify({
         userId: currentUser.id,
-        userName: currentUser.name
+        userName: currentUser.name,
+        anonymous: currentUser.anonymous
       })
     });
     
@@ -586,16 +778,16 @@ async function joinGame(gameId) {
     
     const data = await response.json();
     
-    currentGame = {
-      id: gameId,
-      isCreator: false,
+      currentGame = {
+        id: gameId,
+        isCreator: false,
       question: data.question,
       status: data.status || 'waiting_players'
-    };
+      };
     
     console.log(`Присоединились к игре, статус: ${currentGame.status}, вопрос: ${currentGame.question ? 'есть' : 'нет'}`);
-    
-    if (data.question) {
+      
+      if (data.question) {
       if (currentGame.status === 'collecting_answers' || currentGame.status === 'waiting_players') {
         showAnswerScreen(data.question);
       } else if (currentGame.status === 'voting') {
@@ -643,7 +835,8 @@ async function submitAnswer() {
       },
       body: JSON.stringify({
         userId: currentUser.id,
-        answer: answer
+        answer: answer,
+        anonymous: currentUser.anonymous
       })
     });
     
@@ -654,10 +847,10 @@ async function submitAnswer() {
     const data = await response.json();
     
     showNotification(`Ваш ответ принят! Осталось ответов до голосования: ${data.remainingToVoting}`, 'success');
-    
+      
     // Если это создатель игры, показываем ему доп. опции
     if (currentGame.isCreator) {
-      showCreatorOptions();
+      showCreatorOptions(data.answersCount);
     } else {
       showScreen('gameScreen');
     }
@@ -667,107 +860,23 @@ async function submitAnswer() {
   }
 }
 
-// Показ опций для создателя игры
-function showCreatorOptions() {
+// Показываем опции для создателя, если >=3 ответов, появляется кнопка для старта голосования
+function showCreatorOptions(answersCount) {
   const gamesList = document.getElementById('gamesList');
   if (gamesList && currentGame) {
     showScreen('gameScreen');
+    let votingBtn = '';
+    if (answersCount >= 3) {
+      votingBtn = `<button class="papyrus-button shimmer" onclick="startVoting()">Начать голосование</button>`;
+    }
     gamesList.innerHTML = `
       <div class="creator-options">
         <h2>Вы создатель игры</h2>
         <p>Вопрос: "${currentGame.question}"</p>
-        <button class="papyrus-button shimmer" onclick="startVoting()">Начать голосование</button>
+        ${votingBtn}
         <button class="papyrus-button shimmer" onclick="loadGames()">Вернуться к списку игр</button>
       </div>
     `;
-  }
-}
-
-// Запуск голосования
-async function startVoting() {
-  if (!currentGame || !currentGame.id || !currentGame.isCreator) {
-    showNotification('Только создатель игры может начать голосование', 'warning');
-    return;
-  }
-  
-  try {
-    const response = await fetch(`${API_URL}/games/${currentGame.id}/startVoting`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        userId: currentUser.id
-      })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Ошибка HTTP: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    showNotification('Голосование успешно запущено!', 'success');
-    currentGame.status = 'voting';
-    loadVotingOptions();
-  } catch (error) {
-    console.error('Ошибка запуска голосования:', error);
-    showNotification('Произошла ошибка при запуске голосования. Пожалуйста, попробуйте еще раз.', 'error');
-  }
-}
-
-// Периодически проверяем статус игры
-let statusCheckInterval = null;
-
-function startStatusCheck() {
-  if (statusCheckInterval) {
-    clearInterval(statusCheckInterval);
-  }
-  
-  statusCheckInterval = setInterval(() => {
-    if (currentGame && currentGame.id) {
-      checkGameStatus();
-    }
-  }, 5000); // Проверка каждые 5 секунд
-}
-
-// Улучшенная функция проверки статуса игры
-async function checkGameStatus() {
-  if (!currentGame || !currentGame.id) {
-    console.error('Нет активной игры для проверки статуса');
-    return;
-  }
-  
-  try {
-    const response = await fetch(`${API_URL}/games/${currentGame.id}?_=${Date.now()}`);
-    
-    if (!response.ok) {
-      console.warn(`Ошибка при проверке статуса игры: ${response.status} ${response.statusText}`);
-      return;
-    }
-    
-    const gameData = await response.json();
-    
-    // Обновляем локальный статус игры
-    currentGame.status = gameData.status;
-    
-    console.log(`Статус игры ${currentGame.id}: ${gameData.status}`);
-    
-    // Реагируем на изменение статуса
-    if (gameData.status === 'voting' && document.getElementById('answerScreen').style.display === 'block') {
-      showNotification('Началось голосование! Переходим к выбору лучших ответов.', 'info');
-      loadVotingOptions();
-    } else if (gameData.status === 'results' && document.getElementById('votingScreen').style.display === 'block') {
-      showNotification('Голосование завершено! Переходим к результатам.', 'success');
-      loadResults();
-    }
-  } catch (error) {
-    console.error('Ошибка при проверке статуса игры:', error);
-    
-    // Дополнительно проверяем сетевое соединение
-    if (!navigator.onLine) {
-      showNotification('Отсутствует подключение к интернету. Проверьте ваше соединение.', 'error');
-    }
   }
 }
 
@@ -804,9 +913,15 @@ async function loadVotingOptions() {
         const option = document.createElement('div');
         option.className = 'answer-option';
         option.dataset.id = answer.id;
+        
+        // Показываем имя пользователя, если ответ не анонимный
+        const usernameDisplay = answer.anonymous 
+          ? '<div class="answer-username anonymous-user">Анонимный пользователь</div>'
+          : `<div class="answer-username">${answer.username}</div>`;
+          
         option.innerHTML = `
           <div class="answer-text">${answer.text}</div>
-          <div class="answer-username">${answer.username}</div>
+          ${usernameDisplay}
         `;
         option.onclick = function() {
           toggleVoteSelection(this);
@@ -892,8 +1007,8 @@ async function submitVotes() {
     
     // Если результаты уже готовы, показываем их
     if (result.resultsReady) {
-      loadResults();
-    } else {
+        loadResults();
+      } else {
       // Иначе обновляем статус голосования
       const votingStatus = document.getElementById('votingStatus');
       if (votingStatus) {
@@ -962,9 +1077,14 @@ async function loadResults() {
       else if (index === 1) medal = "🥈";
       else if (index === 2) medal = "🥉";
       
+      // Отображаем имя пользователя, если ответ не анонимный
+      const usernameDisplay = result.anonymous 
+        ? '<strong>Анонимный пользователь</strong>'
+        : `<strong>${result.username}</strong>`;
+      
       resultItem.innerHTML = `
         <div class="medal">${medal}</div>
-        <div class="answer-text"><strong>${result.username}:</strong> ${result.text}</div>
+        <div class="answer-text">${usernameDisplay}: ${result.text}</div>
         <div class="vote-count">${result.votes} голос(ов)</div>
       `;
       
@@ -976,6 +1096,94 @@ async function loadResults() {
     console.error('Ошибка загрузки результатов:', error);
     showNotification('Произошла ошибка при загрузке результатов: ' + error.message, 'error');
     showScreen('gameScreen');
+  }
+}
+
+// Запуск голосования
+async function startVoting() {
+  if (!currentGame || !currentGame.id || !currentGame.isCreator) {
+    showNotification('Только создатель игры может начать голосование', 'warning');
+    return;
+  }
+  
+  try {
+    const response = await fetch(`${API_URL}/games/${currentGame.id}/startVoting`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userId: currentUser.id
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Ошибка HTTP: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    showNotification('Голосование успешно запущено!', 'success');
+    currentGame.status = 'voting';
+      loadVotingOptions();
+  } catch (error) {
+    console.error('Ошибка запуска голосования:', error);
+    showNotification('Произошла ошибка при запуске голосования. Пожалуйста, попробуйте еще раз.', 'error');
+  }
+}
+
+// Периодически проверяем статус игры
+let statusCheckInterval = null;
+
+function startStatusCheck() {
+  if (statusCheckInterval) {
+    clearInterval(statusCheckInterval);
+  }
+  
+  statusCheckInterval = setInterval(() => {
+    if (currentGame && currentGame.id) {
+      checkGameStatus();
+    }
+  }, 5000); // Проверка каждые 5 секунд
+}
+
+// Улучшенная функция проверки статуса игры
+async function checkGameStatus() {
+  if (!currentGame || !currentGame.id) {
+    console.error('Нет активной игры для проверки статуса');
+    return;
+  }
+  
+  try {
+    const response = await fetch(`${API_URL}/games/${currentGame.id}?_=${Date.now()}`);
+    
+    if (!response.ok) {
+      console.warn(`Ошибка при проверке статуса игры: ${response.status} ${response.statusText}`);
+      return;
+    }
+    
+    const gameData = await response.json();
+    
+    // Обновляем локальный статус игры
+    currentGame.status = gameData.status;
+    
+    console.log(`Статус игры ${currentGame.id}: ${gameData.status}`);
+    
+    // Реагируем на изменение статуса
+    if (gameData.status === 'voting' && document.getElementById('answerScreen').style.display === 'block') {
+      showNotification('Началось голосование! Переходим к выбору лучших ответов.', 'info');
+      loadVotingOptions();
+    } else if (gameData.status === 'results' && document.getElementById('votingScreen').style.display === 'block') {
+      showNotification('Голосование завершено! Переходим к результатам.', 'success');
+      loadResults();
+    }
+  } catch (error) {
+    console.error('Ошибка при проверке статуса игры:', error);
+    
+    // Дополнительно проверяем сетевое соединение
+    if (!navigator.onLine) {
+      showNotification('Отсутствует подключение к интернету. Проверьте ваше соединение.', 'error');
+    }
   }
 }
 
@@ -1044,11 +1252,11 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // Если мы внутри Telegram WebApp, готовим его
-  if (window.Telegram && window.Telegram.WebApp) {
+if (window.Telegram && window.Telegram.WebApp) {
     window.Telegram.WebApp.ready();
     // Настраиваем обработчик кнопки "Назад"
     window.Telegram.WebApp.BackButton.onClick(goBack);
-  }
+}
 });
 
 // Обработка ошибок

@@ -62,20 +62,48 @@ function getUsers() {
 
 // Добавить/обновить пользователя
 function setUser(userId, userData) {
-  // Если пользователь существует, объединяем данные
-  users[userId] = {
-    ...(users[userId] || {}),
-    ...userData
-  };
+  // Создаем нового пользователя, если его еще нет
+  if (!users[userId]) {
+    users[userId] = {};
+  }
+  
+  // Обновляем только переданные поля
+  users[userId] = { ...users[userId], ...userData };
+  
+  // Сохраняем флаг анонимности, если указан
+  if (userData.anonymous !== undefined) {
+    users[userId].anonymous = !!userData.anonymous;
+  }
+  
+  // Добавляем дату последнего обновления
+  users[userId].lastUpdated = new Date().toISOString();
+  
+  saveUsers();
+  return users[userId];
+}
+
+// Удалить пользователя
+function deleteUser(userId) {
+  delete users[userId];
   saveUsers();
 }
 
-// Функция для очистки всех пользователей
+// Очистить всех пользователей
 function clearAllUsers() {
   users = {};
   saveUsers();
   console.log('Все пользователи удалены');
   return true;
+}
+
+// Получить конкретного пользователя
+function getUser(userId) {
+  return users[userId] || null;
+}
+
+// Проверить, является ли пользователь анонимным
+function isUserAnonymous(userId) {
+  return users[userId] && !!users[userId].anonymous;
 }
 
 // Автосохранение каждую минуту
@@ -86,5 +114,8 @@ module.exports = {
   saveUsers,
   getUsers,
   setUser,
-  clearAllUsers
+  deleteUser,
+  clearAllUsers,
+  getUser,
+  isUserAnonymous
 };

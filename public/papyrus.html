@@ -86,14 +86,19 @@
                 
                 <div class="input-area">
                     <div id="nameChoiceButtons" class="button-group">
-                        <button id="newNameBtn" class="papyrus-button shimmer">Новое имя</button>
-                        <button id="existingNameBtn" class="papyrus-button shimmer">Использовать сохранённое имя</button>
+                        <!-- Кнопки будут добавлены динамически -->
                     </div>
                     
                     <div id="newNameSection" style="display: none;">
                         <p>Придумай прикольное имя, которое увидят все участники:</p>
                         <div class="papyrus-scroll">
                             <input type="text" id="nameInput" class="answer-input" placeholder="Твоё прикольное имя..." maxlength="20">
+                        </div>
+                        <div class="anonymous-checkbox">
+                            <label for="anonymousCheck">
+                                <input type="checkbox" id="anonymousCheck"> 
+                                Участвовать анонимно (другие игроки не увидят твоё имя)
+                            </label>
                         </div>
                         <div class="button-group">
                             <button id="submitNameBtn" class="papyrus-button shimmer">Сохранить имя</button>
@@ -167,6 +172,9 @@
                     <p>Напиши самый смешной ответ, который придёт в голову:</p>
                     <div class="papyrus-scroll">
                         <textarea id="answerInput" class="answer-input" placeholder="Твой смешной ответ..." rows="4"></textarea>
+                    </div>
+                    <div class="anonymous-status">
+                        <p>Статус: <span id="anonymousStatus"></span></p>
                     </div>
                     <div class="button-group">
                         <button id="submitAnswerBtn" class="papyrus-button shimmer">Отправить ответ</button>

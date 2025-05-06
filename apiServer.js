@@ -274,7 +274,7 @@ app.post('/api/games', (req, res) => {
 // Присоединиться к игре
 app.post('/api/games/:gameId/join', (req, res) => {
   const gameId = req.params.gameId;
-  const { userId, userName } = req.body;
+  const { userId, userName, anonymous } = req.body;
   
   if (!userId || !userName) {
     return res.status(400).json({ error: 'Не хватает данных' });
@@ -292,7 +292,10 @@ app.post('/api/games/:gameId/join', (req, res) => {
   }
   
   // Сохраняем пользователя
-  userManager.setUser(userId, { funnyName: userName });
+  userManager.setUser(userId, { 
+    funnyName: userName,
+    anonymous: !!anonymous // Сохраняем флаг анонимности
+  });
   
   // Добавляем в игру
   if (!game.participants.includes(userId)) {
@@ -302,6 +305,7 @@ app.post('/api/games/:gameId/join', (req, res) => {
     
     game.participantData[userId] = {
       username: userName,
+      anonymous: !!anonymous, // Сохраняем флаг анонимности
       joinTime: new Date().toISOString()
     };
     
@@ -317,9 +321,12 @@ app.post('/api/games/:gameId/join', (req, res) => {
     try {
       // Проверяем ID создателя перед отправкой уведомления
       if (game.initiator && typeof game.initiator === 'string' && game.initiator.length > 0) {
+        // Формируем сообщение о присоединении игрока
+        let playerName = anonymous ? 'Анонимный игрок' : userName;
+        
         bot.telegram.sendMessage(
           game.initiator,
-          `🎮 Новый игрок присоединился!\n\n${userName} вошел в игру.\nВсего игроков: ${game.participants.length}/10`,
+          `🎮 Новый игрок присоединился!\n\n${playerName} вошел в игру.\nВсего игроков: ${game.participants.length}/10`,
           {
             parse_mode: 'HTML',
             reply_markup: {
@@ -346,7 +353,7 @@ app.post('/api/games/:gameId/join', (req, res) => {
 // Отправить ответ на вопрос
 app.post('/api/games/:gameId/answer', (req, res) => {
   const gameId = req.params.gameId;
-  const { userId, answer } = req.body;
+  const { userId, answer, anonymous } = req.body;
   
   if (!userId || !answer) {
     return res.status(400).json({ error: 'Не хватает данных' });
@@ -370,9 +377,13 @@ app.post('/api/games/:gameId/answer', (req, res) => {
   
   if (!game.answers) game.answers = {};
   
+  // Проверяем настройки анонимности из данных пользователя
+  const isAnonymous = anonymous !== undefined ? !!anonymous : !!users[userId].anonymous;
+  
   game.answers[userId] = {
     text: answer,
     username: users[userId].funnyName,
+    anonymous: isAnonymous, // Сохраняем флаг анонимности
     timestamp: new Date().toISOString()
   };
   
@@ -512,7 +523,8 @@ app.get('/api/games/:gameId/answers', (req, res) => {
     .map(([uid, ans]) => ({
       id: uid,
       text: ans.text,
-      username: ans.username
+      username: ans.username,
+      anonymous: !!ans.anonymous // Передаем флаг анонимности
     }));
     
   res.json({ answers, question: game.currentQuestion });
@@ -579,9 +591,12 @@ app.get('/api/games/:gameId/results', (req, res) => {
     return res.status(400).json({ error: 'Результаты еще не готовы' });
   }
   
+  // Добавляем информацию о анонимности для результатов
+  const results = game.lastResults || [];
+  
   res.json({
     question: game.currentQuestion,
-    results: game.lastResults || []
+    results: results
   });
 });
 
@@ -608,6 +623,7 @@ function calculateResults(gameId) {
       userId,
       username: answer.username,
       text: answer.text,
+      anonymous: !!answer.anonymous, // Добавляем флаг анонимности
       votes: votes[userId] || 0
     }))
     .sort((a, b) => b.votes - a.votes);
@@ -651,7 +667,10 @@ function notifyAboutResults(gameId) {
     else if (index === 1) medal = '🥈 ';
     else if (index === 2) medal = '🥉 ';
     
-    resultText += `${medal}${result.username}: "${result.text}" - ${result.votes} голос(ов)\n`;
+    // Отображаем имя пользователя, если ответ не анонимный
+    const displayName = result.anonymous ? 'Анонимный пользователь' : result.username;
+    
+    resultText += `${medal}${displayName}: "${result.text}" - ${result.votes} голос(ов)\n`;
   });
   
   resultText += '\nСпасибо всем за участие! 👏';
