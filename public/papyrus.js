@@ -24,7 +24,11 @@ if (!window.Telegram || !window.Telegram.WebApp) {
       },
       ready: function() { console.log('WebApp.ready вызван'); },
       expand: function() { console.log('WebApp.expand вызван'); },
-      close: function() { console.log('WebApp.close вызван'); }
+      close: function() { console.log('WebApp.close вызван'); },
+      isExpanded: true,
+      HapticFeedback: {
+        impactOccurred: function(style) { console.log('HapticFeedback.impactOccurred вызван с', style); }
+      }
     }
   };
 } else {
@@ -38,6 +42,7 @@ let currentUser = {
 };
 let currentGame = null;
 let navigationHistory = []; // История навигации для кнопки "Назад"
+let keyboardVisible = false; // Флаг для отслеживания видимости клавиатуры
 
 // Использование Telegram ID пользователя
 function getTelegramUserId() {
@@ -81,6 +86,24 @@ function showNotification(message, type = 'info') {
     notification.style.opacity = '0';
     setTimeout(() => notification.remove(), 500);
   }, 5000);
+}
+
+// Функция для проверки, активен ли какой-либо элемент ввода
+function isInputActive() {
+  const activeElement = document.activeElement;
+  return activeElement && (
+    activeElement.tagName === 'INPUT' || 
+    activeElement.tagName === 'TEXTAREA' ||
+    activeElement.isContentEditable
+  );
+}
+
+// Функция для скрытия клавиатуры
+function hideKeyboard() {
+  if (!isInputActive()) return false;
+  
+  document.activeElement.blur();
+  return true;
 }
 
 // Функция для показа экранов с отслеживанием истории
@@ -150,6 +173,13 @@ function showScreen(screenId) {
 
 // Функция возврата назад
 function goBack() {
+  // Проверяем, не нужно ли сначала скрыть клавиатуру
+  if (hideKeyboard()) {
+    console.log('Клавиатура скрыта');
+    keyboardVisible = false;
+    return; // Останавливаемся, если клавиатура была скрыта
+  }
+
   if (navigationHistory.length > 0) {
     const previousScreen = navigationHistory.pop();
     console.log(`Возвращаемся к экрану: ${previousScreen}`);
@@ -191,7 +221,7 @@ window.startApp = function() {
     window.Telegram.WebApp.expand();
     
     // Настраиваем обработчик кнопки "Назад"
-    window.Telegram.WebApp.BackButton.onClick(goBack);
+    // Обработчик уже устанавливается в DOMContentLoaded, не дублируем его здесь
   }
   
   showScreen('nameScreen');
@@ -199,6 +229,60 @@ window.startApp = function() {
   // Показываем главный выбор имен при загрузке экрана
   showNameChoiceOptions();
 };
+
+// Обработчики для отслеживания состояния клавиатуры
+document.addEventListener('focusin', function(e) {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+    console.log('Клавиатура активирована');
+    keyboardVisible = true;
+    document.body.classList.add('keyboard-open');
+  }
+});
+
+document.addEventListener('focusout', function(e) {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+    // Небольшая задержка для правильной обработки событий
+    setTimeout(() => {
+      if (!isInputActive()) {
+        console.log('Клавиатура скрыта');
+        keyboardVisible = false;
+        document.body.classList.remove('keyboard-open');
+      }
+    }, 100);
+  }
+});
+
+// Добавляем обработчик для аппаратной кнопки "Назад" на Android
+window.addEventListener('popstate', function(e) {
+  // Предотвращаем стандартное поведение только если клавиатура открыта
+  if (keyboardVisible) {
+    e.preventDefault();
+    hideKeyboard();
+  } else {
+    goBack();
+  }
+});
+
+// Предотвращаем стандартное поведение событий "back" Telegram WebApp
+document.addEventListener('DOMContentLoaded', function() {
+  // Добавляем history state, чтобы сработал popstate
+  history.pushState({page: 1}, "Папа Трубок", null);
+  
+  // Для Telegram WebApp устанавливаем дополнительный обработчик
+  if (window.Telegram && window.Telegram.WebApp) {
+    // Если доступен, включаем подтверждение закрытия
+    if (typeof window.Telegram.WebApp.enableClosingConfirmation === 'function') {
+      window.Telegram.WebApp.enableClosingConfirmation();
+    }
+    
+    // Устанавливаем обработчик кнопки "Назад" Telegram
+    if (window.Telegram.WebApp.BackButton) {
+      window.Telegram.WebApp.BackButton.onClick(function() {
+        goBack();
+      });
+    }
+  }
+});
 
 // Функция для отображения опций выбора имени
 function showNameChoiceOptions() {
