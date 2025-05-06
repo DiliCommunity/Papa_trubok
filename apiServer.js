@@ -142,6 +142,15 @@ bot.on('callback_query', async (ctx) => {
       game.status = 'voting';
       gameManager.setGame(gameId, game);
       
+      // Удаляем все напоминания для этой игры
+      const reminders = gameManager.getReminders();
+      Object.keys(reminders).forEach(reminderId => {
+        if (reminders[reminderId].gameId === gameId) {
+          console.log(`Удаляем напоминание ${reminderId} для игры ${gameId}, так как голосование уже начато через бота`);
+          gameManager.deleteReminder(reminderId);
+        }
+      });
+      
       // Получаем URL приложения для кнопки
       const webAppUrl = process.env.WEB_APP_URL || 'https://t.me/PapaTrubokBot/app';
       
@@ -227,6 +236,85 @@ app.get('/api/games/:gameId', (req, res) => {
   });
 });
 
+// Периодически проверяем статус игр
+let statusCheckInterval = null;
+
+function startStatusCheck() {
+  if (statusCheckInterval) {
+    clearInterval(statusCheckInterval);
+  }
+  
+  statusCheckInterval = setInterval(() => {
+    if (currentGame && currentGame.id) {
+      checkGameStatus();
+    }
+  }, 5000); // Проверка каждые 5 секунд
+}
+
+// Функция проверки и отправки напоминаний
+function checkReminders() {
+  const overdueReminders = gameManager.getOverdueReminders();
+  
+  if (overdueReminders.length === 0) {
+    return;
+  }
+  
+  console.log(`Найдено ${overdueReminders.length} просроченных напоминаний`);
+  
+  overdueReminders.forEach(async (reminder) => {
+    try {
+      const games = gameManager.getGames();
+      const game = games[reminder.gameId];
+      
+      if (!game) {
+        console.log(`Игра ${reminder.gameId} не найдена, удаляем напоминание ${reminder.id}`);
+        gameManager.deleteReminder(reminder.id);
+        return;
+      }
+      
+      // Проверяем, что игра все еще находится в состоянии сбора ответов или ожидания участников
+      if (game.status !== 'waiting_players' && game.status !== 'collecting_answers') {
+        console.log(`Игра ${reminder.gameId} уже не в статусе ожидания (${game.status}), удаляем напоминание ${reminder.id}`);
+        gameManager.deleteReminder(reminder.id);
+        return;
+      }
+      
+      // Получаем URL приложения для кнопки
+      const webAppUrl = process.env.WEB_APP_URL || 'https://t.me/PapaTrubokBot/app';
+      
+      // Отправляем уведомление о возможности начать голосование
+      await bot.telegram.sendMessage(
+        reminder.userId,
+        createStyledMessage('НАПОМИНАНИЕ О ГОЛОСОВАНИИ', 
+          `Прошло 12 часов с момента создания вашей игры!\n\n` +
+          `Вопрос: "${game.currentQuestion}"\n\n` +
+          `Текущее количество участников: ${game.participants.length}\n` +
+          `Текущее количество ответов: ${Object.keys(game.answers || {}).length}\n\n` +
+          `Вы можете начать голосование сейчас или подождать еще участников.`, '⏰'),
+        {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: 'Начать голосование', callback_data: `start_game_now_${reminder.gameId}` }],
+              [{ text: 'Открыть игру', web_app: { url: webAppUrl } }]
+            ]
+          }
+        }
+      );
+      
+      console.log(`Отправлено напоминание для игры ${reminder.gameId} пользователю ${reminder.userId}`);
+      
+      // Помечаем напоминание как отправленное
+      gameManager.markReminderAsNotified(reminder.id);
+    } catch (error) {
+      console.error(`Ошибка при отправке напоминания ${reminder.id}:`, error);
+    }
+  });
+}
+
+// Запускаем проверку напоминаний каждые 5 минут
+setInterval(checkReminders, 5 * 60 * 1000);
+
 // Создать новую игру
 app.post('/api/games', (req, res) => {
   const { userId, userName, question } = req.body;
@@ -265,6 +353,10 @@ app.post('/api/games', (req, res) => {
   };
   
   gameManager.setGame(gameId, newGame);
+  
+  // Добавляем напоминание о голосовании через 12 часов
+  const reminderId = gameManager.addVotingReminder(gameId, userId);
+  console.log(`Создано напоминание ${reminderId} для игры ${gameId}`);
   
   console.log(`Игра ${gameId} успешно создана. Статус: ${newGame.status}, active: ${newGame.active}`);
   
@@ -324,9 +416,12 @@ app.post('/api/games/:gameId/join', (req, res) => {
         // Формируем сообщение о присоединении игрока
         let playerName = anonymous ? 'Анонимный игрок' : userName;
         
+        // Если набралось 3 или более игроков, предлагаем начать игру
+        const participantCount = game.participants.length;
+        
         bot.telegram.sendMessage(
           game.initiator,
-          `🎮 Новый игрок присоединился!\n\n${playerName} вошел в игру.\nВсего игроков: ${game.participants.length}/10`,
+          `🎮 Новый игрок присоединился!\n\n${playerName} вошел в игру.\nВсего игроков: ${participantCount}/10`,
           {
             parse_mode: 'HTML',
             reply_markup: {
@@ -339,6 +434,12 @@ app.post('/api/games/:gameId/join', (req, res) => {
           // Логируем ошибку, но не прерываем выполнение
           console.warn(`Не удалось отправить уведомление создателю игры (ID: ${game.initiator}):`, error.message);
         });
+        
+        // Если это третий игрок, создаем напоминание о голосовании через 12 часов для создателя
+        if (participantCount === 3) {
+          const reminderId = gameManager.addVotingReminder(gameId, game.initiator);
+          console.log(`Создано напоминание ${reminderId} для игры ${gameId} после присоединения 3-го игрока`);
+        }
       } else {
         console.warn(`Невалидный ID создателя игры: ${game.initiator}`);
       }
@@ -389,8 +490,25 @@ app.post('/api/games/:gameId/answer', (req, res) => {
   
   // Если набрали 10 ответов, переходим к голосованию
   const answersCount = Object.keys(game.answers).length;
+  
+  // Если это третий ответ в игре и у нас минимум 3 участника, создаем напоминание
+  if (answersCount === 3 && game.participants.length >= 3) {
+    // Создаем напоминание о голосовании через 12 часов для создателя
+    const reminderId = gameManager.addVotingReminder(gameId, game.initiator);
+    console.log(`Создано напоминание ${reminderId} для игры ${gameId} после получения 3 ответов`);
+  }
+  
   if (answersCount >= 10) {
     game.status = 'voting';
+    
+    // Удаляем все напоминания для этой игры, так как голосование запускается автоматически
+    const reminders = gameManager.getReminders();
+    Object.keys(reminders).forEach(reminderId => {
+      if (reminders[reminderId].gameId === gameId) {
+        console.log(`Удаляем напоминание ${reminderId} для игры ${gameId}, так как голосование запускается автоматически`);
+        gameManager.deleteReminder(reminderId);
+      }
+    });
     
     // Уведомляем участников о начале голосования
     if (Array.isArray(game.participants)) {
@@ -461,6 +579,15 @@ app.post('/api/games/:gameId/startVoting', (req, res) => {
   
   game.status = 'voting';
   gameManager.setGame(gameId, game);
+  
+  // Удаляем все напоминания для этой игры
+  const reminders = gameManager.getReminders();
+  Object.keys(reminders).forEach(reminderId => {
+    if (reminders[reminderId].gameId === gameId) {
+      console.log(`Удаляем напоминание ${reminderId} для игры ${gameId}, так как голосование уже начато`);
+      gameManager.deleteReminder(reminderId);
+    }
+  });
   
   // Уведомляем участников о начале голосования
   if (Array.isArray(game.participants)) {

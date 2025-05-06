@@ -17,3 +17,4 @@ npm-debug.log*
 # Файлы данных
 games.json
 users.json
+reminders.json
