@@ -218,12 +218,16 @@ app.get('/api/games', (req, res) => {
 // Получить данные игры
 app.get('/api/games/:gameId', (req, res) => {
   const gameId = req.params.gameId;
+  const userId = req.query.userId;
   const games = gameManager.getGames();
   const game = games[gameId];
   
   if (!game) {
     return res.status(404).json({ error: 'Игра не найдена' });
   }
+  
+  // Проверяем, является ли пользователь создателем игры
+  const isCreator = userId && game.initiator === userId;
   
   res.json({
     id: gameId,
@@ -232,7 +236,8 @@ app.get('/api/games/:gameId', (req, res) => {
     participants: game.participants.length,
     currentQuestion: game.currentQuestion,
     answers: Object.keys(game.answers || {}).length,
-    maxAnswers: 10
+    maxAnswers: 10,
+    isCreator: isCreator
   });
 });
 
@@ -389,6 +394,9 @@ app.post('/api/games/:gameId/join', (req, res) => {
     anonymous: !!anonymous // Сохраняем флаг анонимности
   });
   
+  // Проверяем является ли пользователь создателем
+  const isCreator = game.initiator === userId;
+  
   // Добавляем в игру
   if (!game.participants.includes(userId)) {
     game.participants.push(userId);
@@ -408,53 +416,61 @@ app.post('/api/games/:gameId/join', (req, res) => {
     }
     
     gameManager.setGame(gameId, game);
-
-    // Отправляем уведомление создателю игры
-    try {
-      // Проверяем ID создателя перед отправкой уведомления
-      if (game.initiator && typeof game.initiator === 'string' && game.initiator.length > 0) {
-        // Формируем сообщение о присоединении игрока
-        let playerName = anonymous ? 'Анонимный игрок' : userName;
-        
-        // Если набралось 3 или более игроков, предлагаем начать игру
-        const participantCount = game.participants.length;
-        
-        bot.telegram.sendMessage(
-          game.initiator,
-          `🎮 Новый игрок присоединился!\n\n${playerName} вошел в игру.\nВсего игроков: ${participantCount}/10`,
-          {
-            parse_mode: 'HTML',
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: 'Начать игру сейчас', callback_data: `start_game_now_${gameId}` }]
-              ]
+    
+    // Отправляем уведомление создателю игры, если текущий пользователь не создатель
+    if (!isCreator) {
+      try {
+        // Проверяем ID создателя перед отправкой уведомления
+        if (game.initiator && typeof game.initiator === 'string' && game.initiator.length > 0) {
+          // Формируем сообщение о присоединении игрока
+          let playerName = anonymous ? 'Анонимный игрок' : userName;
+          
+          // Если набралось 3 или более игроков, предлагаем начать игру
+          const participantCount = game.participants.length;
+          
+          bot.telegram.sendMessage(
+            game.initiator,
+            `🎮 Новый игрок присоединился!\n\n${playerName} вошел в игру.\nВсего игроков: ${participantCount}/10`,
+            {
+              parse_mode: 'HTML',
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: 'Начать игру сейчас', callback_data: `start_game_now_${gameId}` }]
+                ]
+              }
             }
+          ).catch(error => {
+            // Логируем ошибку, но не прерываем выполнение
+            console.warn(`Не удалось отправить уведомление создателю игры (ID: ${game.initiator}):`, error.message);
+          });
+          
+          // Если это третий игрок, создаем напоминание о голосовании через 12 часов для создателя
+          if (participantCount === 3) {
+            const reminderId = gameManager.addVotingReminder(gameId, game.initiator);
+            console.log(`Создано напоминание ${reminderId} для игры ${gameId} после присоединения 3-го игрока`);
           }
-        ).catch(error => {
-          // Логируем ошибку, но не прерываем выполнение
-          console.warn(`Не удалось отправить уведомление создателю игры (ID: ${game.initiator}):`, error.message);
-        });
-        
-        // Если это третий игрок, создаем напоминание о голосовании через 12 часов для создателя
-        if (participantCount === 3) {
-          const reminderId = gameManager.addVotingReminder(gameId, game.initiator);
-          console.log(`Создано напоминание ${reminderId} для игры ${gameId} после присоединения 3-го игрока`);
+        } else {
+          console.warn(`Невалидный ID создателя игры: ${game.initiator}`);
         }
-      } else {
-        console.warn(`Невалидный ID создателя игры: ${game.initiator}`);
+      } catch (e) {
+        console.error('Не удалось отправить уведомление создателю игры:', e);
       }
-    } catch (e) {
-      console.error('Не удалось отправить уведомление создателю игры:', e);
     }
   }
   
-  res.json({ status: 'success', gameId, question: game.currentQuestion, status: game.status });
+  res.json({ 
+    status: 'success', 
+    gameId, 
+    question: game.currentQuestion, 
+    status: game.status,
+    isCreator: isCreator
+  });
 });
 
 // Обработчик для сохранения ответа
 app.post('/api/games/:gameId/answer', (req, res) => {
     const gameId = req.params.gameId;
-    const { userId, answer, username } = req.body;
+    const { userId, answer, username, anonymous } = req.body;
     
     if (!userId || !answer) {
         return res.status(400).json({ error: 'Не хватает данных' });
@@ -476,14 +492,18 @@ app.post('/api/games/:gameId/answer', (req, res) => {
     game.answers[userId] = {
         text: answer,
         username: username,
+        anonymous: !!anonymous,
         timestamp: Date.now()
     };
     
     gameManager.setGame(gameId, game);
     
+    const isCreator = game.initiator === userId;
+    
     res.json({ 
         status: 'success',
-        answersCount: Object.keys(game.answers).length
+        answersCount: Object.keys(game.answers).length,
+        isCreator: isCreator
     });
 });
 
@@ -559,11 +579,17 @@ app.get('/api/games/:gameId/answers', (req, res) => {
     .map(([uid, ans]) => ({
       id: uid,
       text: ans.text,
-      username: ans.username,
+      username: ans.anonymous ? 'Анонимный пользователь' : ans.username,
       anonymous: !!ans.anonymous // Передаем флаг анонимности
     }));
     
-  res.json({ answers, question: game.currentQuestion });
+  const isCreator = game.initiator === userId;
+  
+  res.json({ 
+    answers, 
+    question: game.currentQuestion,
+    isCreator
+  });
 });
 
 // Отправить голоса
@@ -599,7 +625,7 @@ app.post('/api/games/:gameId/vote', (req, res) => {
   
   // Проверяем, все ли проголосовали
   const allVoted = game.participants.every(uid => 
-    game.votes[uid] && game.votes[uid].length > 0);
+    game.votes[uid] && game.votes[uid].length > 0 || uid === userId);
     
   if (allVoted) {
     // Подсчитываем результаты
@@ -848,4 +874,25 @@ app.get('/api/debug/users', (req, res) => {
     totalUsers: Object.keys(users).length,
     users: summary
   });
+});
+
+// Проверка, ответил ли пользователь на вопрос
+app.get('/api/games/:gameId/check-answer', (req, res) => {
+  const gameId = req.params.gameId;
+  const userId = req.query.userId;
+  
+  if (!userId) {
+    return res.status(400).json({ error: 'Не указан ID пользователя' });
+  }
+  
+  const games = gameManager.getGames();
+  const game = games[gameId];
+  
+  if (!game) {
+    return res.status(404).json({ error: 'Игра не найдена' });
+  }
+  
+  const hasAnswered = game.answers && game.answers[userId];
+  
+  res.json({ hasAnswered: !!hasAnswered });
 }); 
