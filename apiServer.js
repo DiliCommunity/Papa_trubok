@@ -451,177 +451,86 @@ app.post('/api/games/:gameId/join', (req, res) => {
   res.json({ status: 'success', gameId, question: game.currentQuestion, status: game.status });
 });
 
-// Отправить ответ на вопрос
+// Обработчик для сохранения ответа
 app.post('/api/games/:gameId/answer', (req, res) => {
-  const gameId = req.params.gameId;
-  const { userId, answer, anonymous } = req.body;
-  
-  if (!userId || !answer) {
-    return res.status(400).json({ error: 'Не хватает данных' });
-  }
-  
-  const games = gameManager.getGames();
-  const game = games[gameId];
-  const users = userManager.getUsers();
-  
-  if (!game) {
-    return res.status(404).json({ error: 'Игра не найдена' });
-  }
-  
-  if (!game.participants.includes(userId)) {
-    return res.status(403).json({ error: 'Вы не участник этой игры' });
-  }
-  
-  if (game.status !== 'collecting_answers' && game.status !== 'waiting_players') {
-    return res.status(400).json({ error: 'Игра не принимает ответы' });
-  }
-  
-  if (!game.answers) game.answers = {};
-  
-  // Проверяем настройки анонимности из данных пользователя
-  const isAnonymous = anonymous !== undefined ? !!anonymous : !!users[userId].anonymous;
-  
-  game.answers[userId] = {
-    text: answer,
-    username: users[userId].funnyName,
-    anonymous: isAnonymous, // Сохраняем флаг анонимности
-    timestamp: new Date().toISOString()
-  };
-  
-  // Если набрали 10 ответов, переходим к голосованию
-  const answersCount = Object.keys(game.answers).length;
-  
-  // Если это третий ответ в игре и у нас минимум 3 участника, создаем напоминание
-  if (answersCount === 3 && game.participants.length >= 3) {
-    // Создаем напоминание о голосовании через 12 часов для создателя
-    const reminderId = gameManager.addVotingReminder(gameId, game.initiator);
-    console.log(`Создано напоминание ${reminderId} для игры ${gameId} после получения 3 ответов`);
-  }
-  
-  if (answersCount >= 10) {
-    game.status = 'voting';
+    const gameId = req.params.gameId;
+    const { userId, answer, username } = req.body;
     
-    // Удаляем все напоминания для этой игры, так как голосование запускается автоматически
-    const reminders = gameManager.getReminders();
-    Object.keys(reminders).forEach(reminderId => {
-      if (reminders[reminderId].gameId === gameId) {
-        console.log(`Удаляем напоминание ${reminderId} для игры ${gameId}, так как голосование запускается автоматически`);
-        gameManager.deleteReminder(reminderId);
-      }
-    });
-    
-    // Уведомляем участников о начале голосования
-    if (Array.isArray(game.participants)) {
-      game.participants.forEach(participantId => {
-        try {
-          // Проверяем ID участника перед отправкой уведомления
-          if (participantId && typeof participantId === 'string' && participantId.length > 0) {
-            // Получаем URL приложения для кнопки
-            const webAppUrl = process.env.WEB_APP_URL || 'https://t.me/PapaTrubokBot/app';
-            
-            bot.telegram.sendMessage(
-              participantId,
-              `🎯 Голосование началось!\n\nУже набралось 10 ответов на вопрос:\n"${game.currentQuestion}"\n\nОткройте мини-приложение, чтобы проголосовать!`,
-              {
-                parse_mode: 'HTML',
-                reply_markup: {
-                  inline_keyboard: [
-                    [{ text: 'Открыть голосование', web_app: { url: webAppUrl } }]
-                  ]
-                }
-              }
-            ).catch(error => {
-              console.warn(`Не удалось отправить уведомление участнику ${participantId}:`, error.message);
-            });
-          }
-        } catch (e) {
-          console.error(`Не удалось отправить уведомление участнику ${participantId}:`, e);
-        }
-      });
-    } else {
-      console.warn(`Отсутствует список участников для уведомления о начале автоматического голосования в игре ${gameId}`);
+    if (!userId || !answer) {
+        return res.status(400).json({ error: 'Не хватает данных' });
     }
-  }
-  
-  gameManager.setGame(gameId, game);
-  
-  res.json({ 
-    status: 'success', 
-    answersCount,
-    remainingToVoting: Math.max(0, 10 - answersCount)
-  });
+    
+    const games = gameManager.getGames();
+    const game = games[gameId];
+    
+    if (!game) {
+        return res.status(404).json({ error: 'Игра не найдена' });
+    }
+    
+    if (game.status !== 'collecting_answers') {
+        return res.status(400).json({ error: 'Игра не принимает ответы' });
+    }
+    
+    // Сохраняем ответ
+    if (!game.answers) game.answers = {};
+    game.answers[userId] = {
+        text: answer,
+        username: username,
+        timestamp: Date.now()
+    };
+    
+    gameManager.setGame(gameId, game);
+    
+    res.json({ 
+        status: 'success',
+        answersCount: Object.keys(game.answers).length
+    });
 });
 
-// Начать голосование (только для создателя)
+// Обработчик для начала голосования
 app.post('/api/games/:gameId/startVoting', (req, res) => {
-  const gameId = req.params.gameId;
-  const { userId } = req.body;
-  
-  if (!userId) {
-    return res.status(400).json({ error: 'Не хватает данных' });
-  }
-  
-  const games = gameManager.getGames();
-  const game = games[gameId];
-  
-  if (!game) {
-    return res.status(404).json({ error: 'Игра не найдена' });
-  }
-  
-  if (game.initiator != userId) {
-    return res.status(403).json({ error: 'Только создатель может начать голосование' });
-  }
-  
-  const answersCount = Object.keys(game.answers || {}).length;
-  if (answersCount < 2) {
-    return res.status(400).json({ error: 'Нужно минимум 2 ответа для голосования' });
-  }
-  
-  game.status = 'voting';
-  gameManager.setGame(gameId, game);
-  
-  // Удаляем все напоминания для этой игры
-  const reminders = gameManager.getReminders();
-  Object.keys(reminders).forEach(reminderId => {
-    if (reminders[reminderId].gameId === gameId) {
-      console.log(`Удаляем напоминание ${reminderId} для игры ${gameId}, так как голосование уже начато`);
-      gameManager.deleteReminder(reminderId);
+    const gameId = req.params.gameId;
+    const { userId } = req.body;
+    
+    if (!userId) {
+        return res.status(400).json({ error: 'Не хватает данных' });
     }
-  });
-  
-  // Уведомляем участников о начале голосования
-  if (Array.isArray(game.participants)) {
-    game.participants.forEach(participantId => {
-      try {
-        // Проверяем ID участника перед отправкой уведомления
-        if (participantId && typeof participantId === 'string' && participantId.length > 0) {
-          // Получаем URL для веб-приложения
-          const webAppUrl = process.env.WEB_APP_URL || 'https://t.me/PapaTrubokBot/app';
-          
-          bot.telegram.sendMessage(
-            participantId,
-            `🎯 Голосование началось!\n\nСоздатель игры начал голосование по вопросу:\n"${game.currentQuestion}"\n\nОткройте мини-приложение, чтобы проголосовать!`,
-            {
-              parse_mode: 'HTML',
-              reply_markup: {
-                inline_keyboard: [
-                  [{ text: 'Открыть голосование', web_app: { url: webAppUrl } }]
-                ]
-              }
+    
+    const games = gameManager.getGames();
+    const game = games[gameId];
+    
+    if (!game) {
+        return res.status(404).json({ error: 'Игра не найдена' });
+    }
+    
+    if (game.initiator != userId) {
+        return res.status(403).json({ error: 'Только создатель может начать голосование' });
+    }
+    
+    const answersCount = Object.keys(game.answers || {}).length;
+    if (answersCount < 2) {
+        return res.status(400).json({ error: 'Нужно минимум 2 ответа для голосования' });
+    }
+    
+    game.status = 'voting';
+    game.votes = {};
+    gameManager.setGame(gameId, game);
+    
+    // Отправляем уведомления участникам
+    if (Array.isArray(game.participants)) {
+        game.participants.forEach(participantId => {
+            if (participantId && typeof participantId === 'string') {
+                bot.telegram.sendMessage(
+                    participantId,
+                    `🎯 Голосование началось!\n\nСоздатель игры начал голосование.\nВопрос: "${game.currentQuestion}"\n\nОткройте приложение, чтобы проголосовать!`
+                ).catch(error => {
+                    console.warn(`Не удалось отправить уведомление участнику ${participantId}:`, error.message);
+                });
             }
-          ).catch(error => {
-            console.warn(`Не удалось отправить уведомление участнику ${participantId}:`, error.message);
-          });
-        }
-      } catch (e) {
-        console.error(`Не удалось отправить уведомление участнику ${participantId}:`, e);
-      }
-    });
-  } else {
-    console.warn(`Отсутствует список участников для уведомления о начале голосования в игре ${gameId}`);
-  }
-  
-  res.json({ status: 'success' });
+        });
+    }
+    
+    res.json({ status: 'success' });
 });
 
 // Получить ответы для голосования
