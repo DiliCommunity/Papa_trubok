@@ -652,8 +652,8 @@ async function loadGames() {
         </div>
         
         <div class="game-room-actions">
-          <button class="papyrus-button shimmer" onclick="joinGameRoom('${game.id}')">
-            Присоединиться
+          <button class="join-room-btn" onclick="joinGameRoom('${game.id}')">
+            Войти в комнату
           </button>
         </div>
       `;
@@ -675,6 +675,11 @@ async function joinGameRoom(gameId) {
     }
     
     const gameData = await response.json();
+    
+    // Проверяем, ответил ли пользователь на вопрос
+    const answeredResponse = await fetch(`${API_URL}/games/${gameId}/check-answer?userId=${currentUser.id}`);
+    const answeredData = await answeredResponse.json();
+    const hasAnswered = answeredData.hasAnswered;
     
     const gamesList = document.getElementById('gamesList');
     if (!gamesList) return;
@@ -706,15 +711,25 @@ async function joinGameRoom(gameId) {
       </div>
       
       <div class="game-room-actions">
-        ${gameData.status === 'collecting_answers' ? `
-          <button class="papyrus-button shimmer" onclick="joinGame('${gameId}')">
-            Присоединиться к игре
+        ${gameData.status === 'collecting_answers' && !hasAnswered ? `
+          <button class="answer-btn" onclick="joinGame('${gameId}'); showAnswerScreen(${JSON.stringify(gameData.currentQuestion)});">
+            Ответить на вопрос
           </button>
-        ` : `
-          <button class="papyrus-button shimmer" onclick="joinGame('${gameId}')">
-            Присоединиться как зритель
+        ` : ''}
+        
+        ${gameData.status === 'collecting_answers' && hasAnswered ? `
+          <p class="status-text">Ваш ответ принят. Ожидайте голосования.</p>
+        ` : ''}
+        
+        ${gameData.status === 'voting' ? `
+          <button class="join-room-btn" onclick="loadVotingOptions('${gameId}')">
+            Перейти к голосованию
           </button>
-        `}
+        ` : ''}
+        
+        <button class="viewer-btn" onclick="joinGame('${gameId}')">
+          ${gameData.status === 'collecting_answers' ? 'Присоединиться как зритель' : 'Присоединиться к игре'}
+        </button>
         
         <button class="papyrus-button shimmer back-button" onclick="loadGames()">
           Вернуться к списку игр
@@ -923,16 +938,11 @@ async function submitAnswer() {
 
         const data = await response.json();
         
-        showNotification('Ваш ответ успешно отправлен!', 'success');
+        showNotification('Ваш ответ успешно отправлен! Ожидайте голосования.', 'success');
         answerInput.value = '';
         
-        // Если это создатель игры, показываем ему опции управления
-        if (currentGame.isCreator) {
-            loadGameDetails(currentGame.id);
-        } else {
-            showScreen('gameScreen');
-            loadGames();
-        }
+        // Возвращаемся в комнату игры
+        joinGameRoom(currentGame.id);
     } catch (error) {
         console.error('Ошибка при отправке ответа:', error);
         showNotification('Произошла ошибка при отправке ответа', 'error');
