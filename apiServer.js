@@ -5,20 +5,17 @@ const gameManager = require('./gameManager');
 const userManager = require('./userManager');
 const path = require('path');
 const dotenv = require('dotenv');
-const { Telegraf, Scenes, session } = require('telegraf');
-const { Markup } = require('telegraf');
 const fs = require('fs');
 const shortid = require('shortid');
-const db = require('./db');
-const io = require('./io');
 
 // Загружаем переменные окружения
 dotenv.config();
 
-// Создаем заглушку для модуля db, если он отсутствует
+// Создаем модуль db с проверкой на существование
 let db;
 try {
   db = require('./db');
+  console.log('Модуль db.js успешно загружен');
 } catch (e) {
   console.warn('Модуль db.js не найден, используется встроенная заглушка');
   // Заглушка для модуля db
@@ -50,6 +47,7 @@ try {
 let io;
 try {
   io = require('./io');
+  console.log('Модуль io.js успешно загружен');
 } catch (e) {
   console.warn('Модуль io.js не найден, используется встроенная заглушка');
   // Заглушка для модуля io
@@ -86,6 +84,8 @@ const PORT = process.env.PORT || 3000;
 let bot = null;
 try {
   if (process.env.BOT_TOKEN) {
+    const { Telegraf, Scenes, session } = require('telegraf');
+    const { Markup } = require('telegraf');
     bot = new Telegraf(process.env.BOT_TOKEN);
     
     // Сцены
