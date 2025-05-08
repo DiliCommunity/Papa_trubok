@@ -681,6 +681,16 @@ async function joinGameRoom(gameId) {
     const answeredData = await answeredResponse.json();
     const hasAnswered = answeredData.hasAnswered;
     
+    // Если пользователь ответил, получаем его ответ
+    let userAnswer = '';
+    if (hasAnswered) {
+      const userAnswerResponse = await fetch(`${API_URL}/games/${gameId}/user-answer?userId=${currentUser.id}`);
+      if (userAnswerResponse.ok) {
+        const userAnswerData = await userAnswerResponse.json();
+        userAnswer = userAnswerData.answer || '';
+      }
+    }
+    
     const gamesList = document.getElementById('gamesList');
     if (!gamesList) return;
     
@@ -718,7 +728,11 @@ async function joinGameRoom(gameId) {
         ` : ''}
         
         ${gameData.status === 'collecting_answers' && hasAnswered ? `
-          <p class="status-text">Ваш ответ принят. Ожидайте голосования.</p>
+          <div class="papyrus-scroll" style="margin-bottom: 15px; background: #fffbe6; padding: 15px; border-radius: 10px; border: 2px solid #c0a97a;">
+            <p style="color: #2a9d8f; font-weight: bold; margin-bottom: 10px;">Ваш ответ принят!</p>
+            <p style="color: #5a2d0c; font-style: italic;">"${userAnswer}"</p>
+            <p style="margin-top: 10px; color: #457b9d;">Ожидайте начала голосования.</p>
+          </div>
         ` : ''}
         
         ${gameData.status === 'voting' ? `
@@ -938,10 +952,15 @@ async function submitAnswer() {
 
         const data = await response.json();
         
+        // Сохраняем ответ пользователя в currentGame
+        if (!currentGame.userAnswer) {
+            currentGame.userAnswer = answer;
+        }
+        
         showNotification('Ваш ответ успешно отправлен! Ожидайте голосования.', 'success');
         answerInput.value = '';
         
-        // Возвращаемся в комнату игры
+        // Возвращаемся в комнату игры и отображаем ответ пользователя
         joinGameRoom(currentGame.id);
     } catch (error) {
         console.error('Ошибка при отправке ответа:', error);
@@ -970,6 +989,9 @@ async function loadGameDetails(gameId) {
         };
         
         showGameRoom(gameData);
+        
+        // Запускаем периодическую проверку статуса игры
+        startStatusCheck();
     } catch (error) {
         console.error('Ошибка при загрузке деталей игры:', error);
         showNotification('Не удалось загрузить информацию об игре', 'error');
@@ -988,7 +1010,7 @@ function showGameRoom(gameData) {
     
     const isCreator = gameData.isCreator;
     const answersCount = gameData.answers;
-    const canStartVoting = isCreator && answersCount >= 2 && gameData.status === 'collecting_answers';
+    const canStartVoting = isCreator && answersCount >= 3 && gameData.status === 'collecting_answers';
     
     gameRoom.innerHTML = `
         <div class="game-room-header">
@@ -1015,6 +1037,8 @@ function showGameRoom(gameData) {
                     <button class="start-voting-btn" onclick="startVoting('${gameData.id}')">
                         Начать голосование
                     </button>
+                ` : answersCount < 3 ? `
+                    <p style="color: #e63946; margin: 10px 0;">Для начала голосования нужно минимум 3 ответа (сейчас: ${answersCount})</p>
                 ` : ''}
             </div>
         ` : ''}
@@ -1259,199 +1283,7 @@ async function loadResults(gameId) {
     
     showScreen('resultsScreen');
   } catch (error) {
-    console.error('Ошибка загрузки результатов:', error);
-    showNotification('Произошла ошибка при загрузке результатов: ' + error.message, 'error');
-    showScreen('gameScreen');
+    console.error('Ошибка при загрузке результатов голосования:', error);
+    showNotification('Не удалось загрузить результаты голосования. Пожалуйста, попробуйте позже.', 'error');
   }
-}
-
-// Запуск голосования
-async function startVoting(gameId) {
-  if (!gameId) {
-    if (!currentGame || !currentGame.id) {
-      showNotification('Ошибка: ID игры не найден', 'warning');
-      return;
-    }
-    gameId = currentGame.id;
-  }
-  
-  try {
-    const response = await fetch(`${API_URL}/games/${gameId}/startVoting`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        userId: currentUser.id
-      })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Ошибка HTTP: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    showNotification('Голосование успешно запущено!', 'success');
-    
-    // Обновляем статус текущей игры
-    if (currentGame && currentGame.id === gameId) {
-      currentGame.status = 'voting';
-    }
-    
-    // Загружаем варианты для голосования
-    loadVotingOptions(gameId);
-  } catch (error) {
-    console.error('Ошибка запуска голосования:', error);
-    showNotification('Произошла ошибка при запуске голосования. Пожалуйста, попробуйте еще раз.', 'error');
-  }
-}
-
-// Периодически проверяем статус игры
-let statusCheckInterval = null;
-
-function startStatusCheck() {
-  if (statusCheckInterval) {
-    clearInterval(statusCheckInterval);
-  }
-  
-  statusCheckInterval = setInterval(() => {
-    if (currentGame && currentGame.id) {
-      checkGameStatus();
-    }
-  }, 5000); // Проверка каждые 5 секунд
-}
-
-// Улучшенная функция проверки статуса игры
-async function checkGameStatus() {
-  if (!currentGame || !currentGame.id) {
-    console.error('Нет активной игры для проверки статуса');
-    return;
-  }
-  
-  try {
-    const response = await fetch(`${API_URL}/games/${currentGame.id}?_=${Date.now()}`);
-    
-    if (!response.ok) {
-      console.warn(`Ошибка при проверке статуса игры: ${response.status} ${response.statusText}`);
-      return;
-    }
-    
-    const gameData = await response.json();
-    
-    // Обновляем локальный статус игры
-    currentGame.status = gameData.status;
-    
-    console.log(`Статус игры ${currentGame.id}: ${gameData.status}`);
-    
-    // Реагируем на изменение статуса
-    if (gameData.status === 'voting' && document.getElementById('answerScreen').style.display === 'block') {
-      showNotification('Началось голосование! Переходим к выбору лучших ответов.', 'info');
-      loadVotingOptions();
-    } else if (gameData.status === 'results' && document.getElementById('votingScreen').style.display === 'block') {
-      showNotification('Голосование завершено! Переходим к результатам.', 'success');
-      loadResults();
-    }
-  } catch (error) {
-    console.error('Ошибка при проверке статуса игры:', error);
-    
-    // Дополнительно проверяем сетевое соединение
-    if (!navigator.onLine) {
-      showNotification('Отсутствует подключение к интернету. Проверьте ваше соединение.', 'error');
-    }
-  }
-}
-
-// Инициализация при загрузке страницы
-document.addEventListener('DOMContentLoaded', function() {
-  console.log('Инициализация приложения...');
-  
-  // Регистрация обработчиков для кнопок выбора имени
-  const newNameBtn = document.getElementById('newNameBtn');
-  if (newNameBtn) {
-    newNameBtn.addEventListener('click', showNewNameForm);
-  }
-  
-  const existingNameBtn = document.getElementById('existingNameBtn');
-  if (existingNameBtn) {
-    existingNameBtn.addEventListener('click', showExistingNames);
-  }
-  
-  // Регистрация обработчиков для кнопок "Назад"
-  const backButtons = [
-    { id: 'backToNameChoiceBtn', action: showNameChoiceOptions },
-    { id: 'backToNameChoiceFromExistingBtn', action: showNameChoiceOptions },
-    { id: 'backToStartBtn', action: () => showScreen('startScreen') },
-    { id: 'backToMainFromQuestionBtn', action: () => showScreen('gameScreen') },
-    { id: 'backToMainFromAnswerBtn', action: () => showScreen('gameScreen') },
-    { id: 'backToMainFromVotingBtn', action: () => showScreen('gameScreen') },
-    { id: 'backToMainBtn', action: () => showScreen('gameScreen') }
-  ];
-  
-  backButtons.forEach(button => {
-    const element = document.getElementById(button.id);
-    if (element) {
-      element.addEventListener('click', button.action);
-    }
-  });
-  
-  // Регистрация обработчиков для функциональных кнопок
-  const submitNameBtn = document.getElementById('submitNameBtn');
-  if (submitNameBtn) {
-    submitNameBtn.addEventListener('click', saveName);
-  }
-  
-  const createGameBtn = document.getElementById('createGameBtn');
-  if (createGameBtn) {
-    createGameBtn.addEventListener('click', createNewGame);
-  }
-  
-  const refreshGamesBtn = document.getElementById('refreshGamesBtn');
-  if (refreshGamesBtn) {
-    refreshGamesBtn.addEventListener('click', loadGames);
-  }
-  
-  const submitQuestionBtn = document.getElementById('submitQuestionBtn');
-  if (submitQuestionBtn) {
-    submitQuestionBtn.addEventListener('click', saveQuestion);
-  }
-  
-  const submitAnswerBtn = document.getElementById('submitAnswerBtn');
-  if (submitAnswerBtn) {
-    submitAnswerBtn.addEventListener('click', submitAnswer);
-  }
-  
-  const submitVotesBtn = document.getElementById('submitVotesBtn');
-  if (submitVotesBtn) {
-    submitVotesBtn.addEventListener('click', submitVotes);
-  }
-
-  // Если мы внутри Telegram WebApp, готовим его
-if (window.Telegram && window.Telegram.WebApp) {
-    window.Telegram.WebApp.ready();
-    // Настраиваем обработчик кнопки "Назад"
-    window.Telegram.WebApp.BackButton.onClick(goBack);
-}
-});
-
-// Обработка ошибок
-window.addEventListener('error', function(event) {
-  console.error('Глобальная ошибка:', event.error || event.message);
-});
-
-// Добавим функцию для проверки было ли уже отвечено на вопрос
-async function checkIfAnswered(gameId) {
-    try {
-        const response = await fetch(`${API_URL}/games/${gameId}/check-answer?userId=${currentUser.id}`);
-        
-        if (!response.ok) {
-            return false;
-        }
-        
-        const data = await response.json();
-        return data.hasAnswered;
-    } catch (error) {
-        console.error('Ошибка при проверке ответа:', error);
-        return false;
-    }
 }

@@ -279,6 +279,8 @@ textarea.form-input {
 .question-text {
     font-size: 1.2rem;
     margin-bottom: 0.5rem;
+    color: #5a2d0c;
+    font-weight: bold;
 }
 
 .question-author {
@@ -322,6 +324,8 @@ textarea.form-input {
 
 .answer-text {
     flex: 1;
+    color: #5a2d0c;
+    font-weight: 500;
 }
 
 .vote-count {
@@ -721,6 +725,11 @@ textarea.form-input {
     box-shadow: 0 4px 24px rgba(255, 204, 0, 0.13);
 }
 
+.question-box .question-text {
+    color: #5a2d0c;
+    font-weight: bold;
+}
+
 .answer-option.selected {
     background: linear-gradient(90deg, #fff8d6 60%, #ffe066 100%);
     border-color: var(--accent-gold);
@@ -747,6 +756,12 @@ textarea.form-input {
     border-color: var(--accent-gold);
     box-shadow: 0 4px 16px rgba(255, 204, 0, 0.13);
     background: linear-gradient(90deg, #fffbe6 80%, #ffe066 100%);
+}
+
+/* Улучшение видимости текста в блоках ответов */
+.answer-option .answer-text {
+    color: #5a2d0c;
+    font-weight: 500;
 }
 
 /* --- Красивые надписи для статусов --- */
@@ -864,9 +879,12 @@ textarea.form-input {
     padding: 15px;
     border-radius: 20px;
     margin-top: 15px;
+    margin-bottom: 15px;
     position: relative;
     z-index: 1;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.1));
+    border: 1px dashed rgba(255, 255, 255, 0.3);
 }
 
 .creator-controls h3 {
@@ -881,17 +899,23 @@ textarea.form-input {
     background: linear-gradient(135deg, #4CAF50, #45a049);
     color: white;
     border: none;
-    padding: 10px 20px;
+    padding: 12px 24px;
     border-radius: 25px;
     cursor: pointer;
     font-weight: bold;
+    font-size: 1.1rem;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    margin: 10px 0;
+    width: 100%;
+    max-width: 300px;
+    display: block;
 }
 
 .start-voting-btn:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
+    background: linear-gradient(135deg, #5BBF5F, #4CAF50);
 }
 
 .start-voting-btn:active {

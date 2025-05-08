@@ -134,8 +134,8 @@ bot.on('callback_query', async (ctx) => {
       }
       
       const answersCount = Object.keys(game.answers || {}).length;
-      if (answersCount < 2) {
-        await ctx.answerCbQuery('Нужно минимум 2 ответа для голосования');
+      if (answersCount < 3) {
+        await ctx.answerCbQuery('Нужно минимум 3 ответа для голосования');
         return;
       }
       
@@ -528,8 +528,8 @@ app.post('/api/games/:gameId/startVoting', (req, res) => {
     }
     
     const answersCount = Object.keys(game.answers || {}).length;
-    if (answersCount < 2) {
-        return res.status(400).json({ error: 'Нужно минимум 2 ответа для голосования' });
+    if (answersCount < 3) {
+        return res.status(400).json({ error: 'Нужно минимум 3 ответа для голосования' });
     }
     
     game.status = 'voting';
@@ -895,4 +895,25 @@ app.get('/api/games/:gameId/check-answer', (req, res) => {
   const hasAnswered = game.answers && game.answers[userId];
   
   res.json({ hasAnswered: !!hasAnswered });
+});
+
+// Получение ответа конкретного пользователя
+app.get('/api/games/:gameId/user-answer', (req, res) => {
+  const gameId = req.params.gameId;
+  const userId = req.query.userId;
+  
+  if (!userId) {
+    return res.status(400).json({ error: 'Не указан ID пользователя' });
+  }
+  
+  const games = gameManager.getGames();
+  const game = games[gameId];
+  
+  if (!game) {
+    return res.status(404).json({ error: 'Игра не найдена' });
+  }
+  
+  const userAnswer = game.answers && game.answers[userId] ? game.answers[userId].text : '';
+  
+  res.json({ answer: userAnswer });
 }); 
