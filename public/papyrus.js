@@ -649,17 +649,21 @@ async function loadGames() {
 // Функция для присоединения к комнате игры
 async function joinGameRoom(gameId) {
   try {
+    console.log(`Присоединяемся к игровой комнате: ${gameId}, пользователь: ${currentUser.id}`);
+    
     const response = await fetch(`${API_URL}/games/${gameId}?userId=${currentUser.id}`);
     if (!response.ok) {
       throw new Error('Не удалось загрузить информацию об игре');
     }
     
     const gameData = await response.json();
+    console.log('Получены данные игры:', gameData);
     
     // Проверяем, ответил ли пользователь на вопрос
     const answeredResponse = await fetch(`${API_URL}/games/${gameId}/check-answer?userId=${currentUser.id}`);
     const answeredData = await answeredResponse.json();
     const hasAnswered = answeredData.hasAnswered;
+    console.log(`Пользователь уже ответил на вопрос: ${hasAnswered}`);
     
     // Если пользователь ответил, получаем его ответ
     let userAnswer = '';
@@ -668,6 +672,7 @@ async function joinGameRoom(gameId) {
       if (userAnswerResponse.ok) {
         const userAnswerData = await userAnswerResponse.json();
         userAnswer = userAnswerData.answer || '';
+        console.log(`Ответ пользователя: "${userAnswer}"`);
       }
     }
     
@@ -726,7 +731,7 @@ async function joinGameRoom(gameId) {
       ` : ''}
       
       <div class="game-room-actions">
-        ${gameData.status === 'collecting_answers' && !hasAnswered && !isCreator ? `
+        ${gameData.status === 'collecting_answers' && !hasAnswered ? `
           <button class="answer-btn" onclick="showAnswerScreen('${gameData.currentQuestion}')">
             Ответить на вопрос
           </button>
@@ -760,6 +765,9 @@ async function joinGameRoom(gameId) {
     
     gamesList.appendChild(gameRoom);
     
+    // Показываем экран игры
+    showScreen('gameScreen');
+    
     // Запускаем периодическую проверку статуса игры
     startStatusCheck();
   } catch (error) {
@@ -774,6 +782,8 @@ function showAnswerScreen(question) {
     showNotification('Ошибка: информация об игре потеряна', 'error');
     return;
   }
+  
+  console.log(`Показываем экран ответа на вопрос: "${question}"`);
   
   const answerQuestionText = document.getElementById('answerQuestionText');
   if (answerQuestionText) {
@@ -803,11 +813,29 @@ function getStatusText(status) {
 // Функция создания новой игры
 function createNewGame() {
   console.log("Вызвана функция createNewGame()");
+  // Проверяем, залогинен ли пользователь
+  if (!currentUser.name) {
+    showNotification('Сначала нужно задать имя!', 'warning');
+    showScreen('nameScreen');
+    return;
+  }
+  
+  // Переходим на экран создания вопроса
   showScreen('questionScreen');
+  
+  // Фокус на поле ввода вопроса
+  const questionInput = document.getElementById('questionInput');
+  if (questionInput) {
+    questionInput.focus();
+    // Очистка предыдущего вопроса при создании новой игры
+    questionInput.value = '';
+  }
 }
 
 // Сохранение вопроса и создание игры
 async function saveQuestion() {
+  console.log("Вызвана функция saveQuestion()");
+  
   const questionInput = document.getElementById('questionInput');
   if (!questionInput) {
     console.error('Элемент ввода вопроса не найден!');
@@ -820,6 +848,8 @@ async function saveQuestion() {
     showNotification('Вопрос должен содержать минимум 5 символов', 'warning');
     return;
   }
+  
+  console.log(`Отправка запроса на создание игры. Вопрос: "${question}"`);
   
   try {
     const response = await fetch(`${API_URL}/games`, {
@@ -834,11 +864,16 @@ async function saveQuestion() {
       })
     });
     
+    console.log(`Статус ответа: ${response.status}`);
+    
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Ошибка создания игры: ${response.status}, ${errorText}`);
       throw new Error(`Ошибка HTTP: ${response.status}`);
     }
     
     const data = await response.json();
+    console.log('Ответ сервера:', data);
     
     if (data.status === 'success') {
       currentGame = {
@@ -851,7 +886,8 @@ async function saveQuestion() {
       showNotification('Игра успешно создана! Ожидайте подключения участников.', 'success');
       
       // Переходим в режим ответа на свой вопрос
-      showAnswerScreen(question);
+      showScreen('gameScreen');
+      joinGameRoom(data.gameId);
     } else {
       showNotification('Ошибка при создании игры: ' + (data.error || 'Неизвестная ошибка'), 'error');
     }
