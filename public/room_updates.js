@@ -90,6 +90,18 @@ function updateRoomUI(gameData, hasAnswered) {
     const participantsCounter = document.querySelector('.game-room-player:first-child');
     const answersCounter = document.querySelector('.game-room-player:last-child');
     
+    // Обновляем заголовок комнаты
+    const roomTitle = document.getElementById('roomTitle');
+    if (roomTitle) {
+        roomTitle.textContent = `Комната игры #${gameData.id}`;
+    }
+    
+    // Обновляем текст вопроса
+    const roomQuestion = document.getElementById('roomQuestion');
+    if (roomQuestion) {
+        roomQuestion.textContent = gameData.currentQuestion || 'Вопрос загружается...';
+    }
+    
     if (participantsCounter) {
         participantsCounter.textContent = `Игроков: ${gameData.participants}`;
     }
@@ -99,40 +111,88 @@ function updateRoomUI(gameData, hasAnswered) {
     }
     
     // Обновляем статус игры
-    const statusElement = document.querySelector('.game-room-status');
+    const statusElement = document.getElementById('roomStatus');
     if (statusElement) {
         statusElement.textContent = getStatusText(gameData.status);
     }
     
-    // Обновляем секцию ответа на вопрос
-    const answerSection = document.querySelector('.answer-section');
-    if (answerSection && gameData.status === 'collecting_answers') {
-        if (hasAnswered) {
-            // Пользователь уже ответил, показываем его ответ
-            answerSection.innerHTML = `
+    // Управление кнопками в комнате
+    const answerButton = document.getElementById('answerButton');
+    const viewAnswersButton = document.getElementById('viewAnswersButton');
+    const startVotingButton = document.getElementById('startVotingButton');
+    
+    // Отображаем ответ пользователя, если он уже ответил
+    const userAnswerDisplay = document.getElementById('userAnswerDisplay');
+    if (userAnswerDisplay) {
+        if (hasAnswered && currentGame.userAnswer) {
+            userAnswerDisplay.style.display = 'block';
+            userAnswerDisplay.innerHTML = `
                 <div class="user-answer-box">
                     <p style="color: #2a9d8f; font-weight: bold; margin-bottom: 10px;">Ваш ответ принят!</p>
                     <p style="color: #5a2d0c; font-style: italic;">"${currentGame.userAnswer}"</p>
                     <p style="margin-top: 10px; color: #457b9d;">Ожидайте начала голосования.</p>
                 </div>
             `;
-        } else {
-            // Пользователь еще не ответил, показываем кнопку
-            answerSection.innerHTML = `
-                <button id="roomAnswerBtn" class="answer-btn">
-                    Ответить на вопрос
-                </button>
-            `;
             
-            // Добавляем обработчик для кнопки
-            const roomAnswerBtn = document.getElementById('roomAnswerBtn');
-            if (roomAnswerBtn) {
-                roomAnswerBtn.addEventListener('click', () => showAnswerScreen(gameData.currentQuestion));
+            // Если пользователь уже ответил, скрываем кнопку ответа
+            if (answerButton) {
+                answerButton.style.display = 'none';
+            }
+        } else {
+            userAnswerDisplay.style.display = 'none';
+            
+            // Если пользователь еще не ответил, показываем кнопку ответа
+            if (answerButton && gameData.status === 'collecting_answers') {
+                answerButton.style.display = 'block';
+                
+                // Добавляем обработчик для кнопки ответа, если его еще нет
+                if (!answerButton.hasListener) {
+                    answerButton.addEventListener('click', function() {
+                        showAnswerScreen(gameData.currentQuestion);
+                    });
+                    answerButton.hasListener = true;
+                }
+            } else if (answerButton) {
+                answerButton.style.display = 'none';
             }
         }
-    } else if (answerSection && gameData.status !== 'collecting_answers') {
-        // Если игра не в режиме сбора ответов, скрываем секцию ответа
-        answerSection.style.display = 'none';
+    }
+    
+    // Показываем кнопку начала голосования только создателю комнаты
+    // и только в режиме сбора ответов, если есть хотя бы 3 ответа
+    if (startVotingButton) {
+        if (gameData.status === 'collecting_answers' && 
+            gameData.isCreator && 
+            gameData.answers >= 3) {
+            startVotingButton.style.display = 'block';
+            
+            // Добавляем обработчик для кнопки начала голосования, если его еще нет
+            if (!startVotingButton.hasListener) {
+                startVotingButton.addEventListener('click', function() {
+                    startVoting(gameData.id);
+                });
+                startVotingButton.hasListener = true;
+            }
+        } else {
+            startVotingButton.style.display = 'none';
+        }
+    }
+    
+    // Кнопка просмотра ответов (для всех)
+    if (viewAnswersButton) {
+        if (gameData.status === 'voting') {
+            viewAnswersButton.style.display = 'block';
+            
+            // Добавляем обработчик для кнопки просмотра ответов, если его еще нет
+            if (!viewAnswersButton.hasListener) {
+                viewAnswersButton.addEventListener('click', function() {
+                    loadVotingOptions(gameData.id);
+                });
+                viewAnswersButton.hasListener = true;
+            }
+        } else {
+            viewAnswersButton.style.display = 'none';
+        }
     }
     
     // Обновляем кнопки действий в зависимости от статуса игры

@@ -646,175 +646,138 @@ async function loadGames() {
   }
 }
 
-// Функция для присоединения к комнате игры
+// Функция для присоединения к конкретной комнате
 async function joinGameRoom(gameId) {
+  console.log(`Присоединяемся к комнате ${gameId}`);
+  
+  if (!currentUser || !currentUser.id) {
+    showNotification('Сначала нужно ввести имя', 'warning');
+    showScreen('nameScreen');
+    return;
+  }
+  
   try {
-    console.log(`Присоединяемся к игровой комнате: ${gameId}, пользователь: ${currentUser.id}`);
+    const response = await fetch(`${API_URL}/games/${gameId}/join`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userId: currentUser.id,
+        username: currentUser.name
+      })
+    });
     
-    const response = await fetch(`${API_URL}/games/${gameId}?userId=${currentUser.id}`);
     if (!response.ok) {
-      throw new Error('Не удалось загрузить информацию об игре');
+      const errorData = await response.json();
+      throw new Error(errorData.error || `Ошибка HTTP: ${response.status}`);
     }
     
     const gameData = await response.json();
-    console.log('Получены данные игры:', gameData);
+    console.log('Данные игры после присоединения:', gameData);
+    
+    // Запоминаем данные текущей игры
+    currentGame = {
+      id: gameId,
+      status: gameData.status,
+      currentQuestion: gameData.currentQuestion,
+      isCreator: gameData.isCreator,
+      initiatorName: gameData.initiatorName,
+      answersCount: gameData.answers,
+      participants: gameData.participants
+    };
+    
+    // Показываем экран комнаты
+    showScreen('roomScreen');
+    
+    // Заполняем информацию о комнате
+    const roomTitle = document.getElementById('roomTitle');
+    if (roomTitle) {
+      roomTitle.textContent = `Комната игры #${gameId}`;
+    }
+    
+    const roomQuestion = document.getElementById('roomQuestion');
+    if (roomQuestion) {
+      roomQuestion.textContent = gameData.currentQuestion || 'Вопрос загружается...';
+    }
+    
+    const roomStatus = document.getElementById('roomStatus');
+    if (roomStatus) {
+      roomStatus.textContent = getStatusText(gameData.status);
+    }
+    
+    const roomAnswersCount = document.getElementById('roomAnswersCount');
+    if (roomAnswersCount) {
+      roomAnswersCount.textContent = gameData.answers;
+    }
     
     // Проверяем, ответил ли пользователь на вопрос
     const answeredResponse = await fetch(`${API_URL}/games/${gameId}/check-answer?userId=${currentUser.id}`);
     const answeredData = await answeredResponse.json();
     const hasAnswered = answeredData.hasAnswered;
-    console.log(`Пользователь уже ответил на вопрос: ${hasAnswered}`);
     
-    // Если пользователь ответил, получаем его ответ
-    let userAnswer = '';
-    if (hasAnswered) {
-      const userAnswerResponse = await fetch(`${API_URL}/games/${gameId}/user-answer?userId=${currentUser.id}`);
-      if (userAnswerResponse.ok) {
-        const userAnswerData = await userAnswerResponse.json();
-        userAnswer = userAnswerData.answer || '';
-        console.log(`Ответ пользователя: "${userAnswer}"`);
+    // Управляем кнопками в комнате
+    const answerButton = document.getElementById('answerButton');
+    const viewAnswersButton = document.getElementById('viewAnswersButton');
+    const startVotingButton = document.getElementById('startVotingButton');
+    const userAnswerDisplay = document.getElementById('userAnswerDisplay');
+    
+    // Отображаем кнопку ответа только если пользователь еще не ответил и статус "сбор ответов"
+    if (answerButton) {
+      if (gameData.status === 'collecting_answers' && !hasAnswered) {
+        answerButton.style.display = 'block';
+      } else {
+        answerButton.style.display = 'none';
       }
     }
     
-    // Сохраняем информацию о текущей игре глобально
-    currentGame = {
-      id: gameId,
-      isCreator: gameData.isCreator,
-      question: gameData.currentQuestion,
-      status: gameData.status,
-      participants: gameData.participants,
-      answersCount: gameData.answers,
-      userAnswer: userAnswer
-    };
+    // Отображаем кнопку начала голосования только создателю, когда есть хотя бы 3 ответа
+    if (startVotingButton) {
+      if (gameData.status === 'collecting_answers' && gameData.isCreator && gameData.answers >= 3) {
+        startVotingButton.style.display = 'block';
+      } else {
+        startVotingButton.style.display = 'none';
+      }
+    }
     
-    const gamesList = document.getElementById('gamesList');
-    if (!gamesList) return;
+    // Отображаем кнопку просмотра ответов только когда статус "голосование"
+    if (viewAnswersButton) {
+      if (gameData.status === 'voting') {
+        viewAnswersButton.style.display = 'block';
+      } else {
+        viewAnswersButton.style.display = 'none';
+      }
+    }
     
-    gamesList.innerHTML = '';
-    
-    const gameRoom = document.createElement('div');
-    gameRoom.className = 'game-room';
-    
-    const isCreator = gameData.isCreator;
-    const answersCount = gameData.answers;
-    const canStartVoting = isCreator && answersCount >= 3 && gameData.status === 'collecting_answers';
-    
-    gameRoom.innerHTML = `
-      <div class="game-room-header">
-        <h2 class="game-room-title">Комната #${gameId}</h2>
-        <span class="game-room-status">${getStatusText(gameData.status)}</span>
-      </div>
-      
-      <div class="question-box">
-        <h3>Вопрос:</h3>
-        <p class="question-text">${gameData.currentQuestion || 'Ожидание вопроса от создателя'}</p>
-        ${gameData.status === 'collecting_answers' ? `
-          ${!hasAnswered ? `
-            <button id="roomAnswerBtn" class="answer-btn" style="margin-top: 18px;">
-              Ответить на вопрос
-            </button>
-          ` : `
-            <div class="user-answer-box" style="margin-top: 18px;">
-              <p style="color: #2a9d8f; font-weight: bold; margin-bottom: 10px;">Ваш ответ принят!</p>
-              <p style="color: #5a2d0c; font-style: italic;">"${userAnswer}"</p>
-              <p style="margin-top: 10px; color: #457b9d;">Ожидайте начала голосования.</p>
-            </div>
-          `}
-        ` : ''}
-      </div>
-      
-      <div class="game-room-info">
-        <div class="game-room-players">
-          <span class="game-room-player">Игроков: ${gameData.participants}</span>
-          <span class="game-room-player">Ответов: ${answersCount}</span>
-        </div>
-      </div>
-      
-      ${gameData.status === 'collecting_answers' ? `
-        <div class="answer-section">
-          ${!hasAnswered ? `
-            <button id="roomAnswerBtn" class="answer-btn">
-            Ответить на вопрос
-          </button>
-          ` : `
+    // Если пользователь уже ответил, показываем его ответ
+    if (userAnswerDisplay) {
+      if (hasAnswered) {
+        // Получаем ответ пользователя
+        const userAnswerResponse = await fetch(`${API_URL}/games/${gameId}/user-answer?userId=${currentUser.id}`);
+        if (userAnswerResponse.ok) {
+          const userAnswerData = await userAnswerResponse.json();
+          currentGame.userAnswer = userAnswerData.answer;
+          
+          userAnswerDisplay.style.display = 'block';
+          userAnswerDisplay.innerHTML = `
             <div class="user-answer-box">
               <p style="color: #2a9d8f; font-weight: bold; margin-bottom: 10px;">Ваш ответ принят!</p>
-              <p style="color: #5a2d0c; font-style: italic;">"${userAnswer}"</p>
+              <p style="color: #5a2d0c; font-style: italic;">"${currentGame.userAnswer}"</p>
               <p style="margin-top: 10px; color: #457b9d;">Ожидайте начала голосования.</p>
             </div>
-          `}
-        </div>
-        ` : ''}
-        
-      ${isCreator && gameData.status === 'collecting_answers' ? `
-        <div class="creator-controls">
-          <h3>Управление игрой</h3>
-          ${canStartVoting ? `
-            <button class="start-voting-btn" id="startVotingBtn">
-              Начать голосование
-            </button>
-          ` : answersCount < 3 ? `
-            <p style="color: #e63946; margin: 10px 0;">Для начала голосования нужно минимум 3 ответа (сейчас: ${answersCount})</p>
-          ` : ''}
-        </div>
-        ` : ''}
-        
-      <div class="game-room-actions">
-        ${gameData.status === 'voting' ? `
-          <button class="join-room-btn" id="goToVotingBtn">
-            Перейти к голосованию
-          </button>
-        ` : ''}
-        
-        ${gameData.status === 'results' ? `
-          <button class="join-room-btn" id="viewResultsBtn">
-            Посмотреть результаты
-        </button>
-        ` : ''}
-        
-        <button class="papyrus-button shimmer back-button" id="backToGamesBtn">
-          Вернуться к списку игр
-        </button>
-      </div>
-    `;
-    
-    gamesList.appendChild(gameRoom);
-    
-    // Добавляем обработчики событий для кнопок
-    const roomAnswerBtn = document.getElementById('roomAnswerBtn');
-    if (roomAnswerBtn) {
-      roomAnswerBtn.addEventListener('click', () => showAnswerScreen(gameData.currentQuestion));
+          `;
+        }
+      } else {
+        userAnswerDisplay.style.display = 'none';
+      }
     }
     
-    const startVotingBtn = document.getElementById('startVotingBtn');
-    if (startVotingBtn) {
-      startVotingBtn.addEventListener('click', () => startVoting(gameId));
-    }
+    // Запускаем периодическое обновление статуса комнаты
+    startRoomUpdates(gameId);
     
-    const goToVotingBtn = document.getElementById('goToVotingBtn');
-    if (goToVotingBtn) {
-      goToVotingBtn.addEventListener('click', () => loadVotingOptions(gameId));
-    }
-    
-    const viewResultsBtn = document.getElementById('viewResultsBtn');
-    if (viewResultsBtn) {
-      viewResultsBtn.addEventListener('click', () => loadResults(gameId));
-    }
-    
-    const backToGamesBtn = document.getElementById('backToGamesBtn');
-    if (backToGamesBtn) {
-      backToGamesBtn.addEventListener('click', loadGames);
-    }
-    
-    // Показываем экран игры
-    showScreen('gameScreen');
-    
-    // Запускаем периодическую проверку статуса игры и обновление состояния комнаты
-    stopRoomUpdates(); // Сначала останавливаем предыдущие обновления, если они есть
-    startRoomUpdates(gameId); // Запускаем обновления для этой комнаты
   } catch (error) {
-    console.error('Ошибка при загрузке комнаты игры:', error);
-    showNotification('Не удалось загрузить информацию об игре', 'error');
+    console.error('Ошибка при присоединении к комнате:', error);
+    showNotification(`Не удалось присоединиться к комнате: ${error.message}`, 'error');
   }
 }
 
@@ -1290,4 +1253,53 @@ if (window.Telegram && window.Telegram.WebApp) {
 // Обработка ошибок
 window.addEventListener('error', function(event) {
   console.error('Глобальная ошибка:', event.error || event.message);
+});
+
+// Инициализация обработчиков комнаты
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Инициализация обработчиков комнаты');
+    
+    // Кнопка "Ответить" в комнате
+    const answerButton = document.getElementById('answerButton');
+    if (answerButton) {
+        answerButton.addEventListener('click', function() {
+            if (currentGame && currentGame.currentQuestion) {
+                showAnswerScreen(currentGame.currentQuestion);
+            } else {
+                showNotification('Ошибка: вопрос не найден', 'error');
+            }
+        });
+    }
+    
+    // Кнопка "Начать голосование" в комнате
+    const startVotingButton = document.getElementById('startVotingButton');
+    if (startVotingButton) {
+        startVotingButton.addEventListener('click', function() {
+            if (currentGame && currentGame.id) {
+                startVoting(currentGame.id);
+            } else {
+                showNotification('Ошибка: игра не найдена', 'error');
+            }
+        });
+    }
+    
+    // Кнопка "Просмотр ответов" в комнате
+    const viewAnswersButton = document.getElementById('viewAnswersButton');
+    if (viewAnswersButton) {
+        viewAnswersButton.addEventListener('click', function() {
+            if (currentGame && currentGame.id) {
+                loadVotingOptions(currentGame.id);
+            } else {
+                showNotification('Ошибка: игра не найдена', 'error');
+            }
+        });
+    }
+    
+    // Кнопка "Покинуть комнату" в комнате
+    const leaveRoomButton = document.getElementById('leaveRoomButton');
+    if (leaveRoomButton) {
+        leaveRoomButton.addEventListener('click', function() {
+            loadGames();
+        });
+    }
 });

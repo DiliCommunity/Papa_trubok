@@ -246,11 +246,16 @@ function completeAuth(authData) {
         }
     }
     
-    // Переходим к экрану запуска игры
-    showScreen('startScreen');
-    
     // Обновляем интерфейс с учетом авторизации
     updateUIAfterAuth(authData);
+    
+    // Переходим к экрану ввода имени вместо экрана запуска
+    showScreen('nameScreen');
+    
+    // Показываем опции выбора имени
+    if (typeof showNameChoiceOptions === 'function') {
+        showNameChoiceOptions();
+    }
 }
 
 // Обновление интерфейса после авторизации
