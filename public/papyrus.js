@@ -708,6 +708,19 @@ async function joinGameRoom(gameId) {
       <div class="question-box">
         <h3>Вопрос:</h3>
         <p class="question-text">${gameData.currentQuestion || 'Ожидание вопроса от создателя'}</p>
+        ${gameData.status === 'collecting_answers' ? `
+          ${!hasAnswered ? `
+            <button id="roomAnswerBtn" class="answer-btn" style="margin-top: 18px;">
+              Ответить на вопрос
+            </button>
+          ` : `
+            <div class="user-answer-box" style="margin-top: 18px;">
+              <p style="color: #2a9d8f; font-weight: bold; margin-bottom: 10px;">Ваш ответ принят!</p>
+              <p style="color: #5a2d0c; font-style: italic;">"${userAnswer}"</p>
+              <p style="margin-top: 10px; color: #457b9d;">Ожидайте начала голосования.</p>
+            </div>
+          `}
+        ` : ''}
       </div>
       
       <div class="game-room-info">
@@ -721,8 +734,8 @@ async function joinGameRoom(gameId) {
         <div class="answer-section">
           ${!hasAnswered ? `
             <button id="roomAnswerBtn" class="answer-btn">
-              Ответить на вопрос
-            </button>
+            Ответить на вопрос
+          </button>
           ` : `
             <div class="user-answer-box">
               <p style="color: #2a9d8f; font-weight: bold; margin-bottom: 10px;">Ваш ответ принят!</p>
@@ -731,8 +744,8 @@ async function joinGameRoom(gameId) {
             </div>
           `}
         </div>
-      ` : ''}
-      
+        ` : ''}
+        
       ${isCreator && gameData.status === 'collecting_answers' ? `
         <div class="creator-controls">
           <h3>Управление игрой</h3>
@@ -744,8 +757,8 @@ async function joinGameRoom(gameId) {
             <p style="color: #e63946; margin: 10px 0;">Для начала голосования нужно минимум 3 ответа (сейчас: ${answersCount})</p>
           ` : ''}
         </div>
-      ` : ''}
-      
+        ` : ''}
+        
       <div class="game-room-actions">
         ${gameData.status === 'voting' ? `
           <button class="join-room-btn" id="goToVotingBtn">
@@ -756,7 +769,7 @@ async function joinGameRoom(gameId) {
         ${gameData.status === 'results' ? `
           <button class="join-room-btn" id="viewResultsBtn">
             Посмотреть результаты
-          </button>
+        </button>
         ` : ''}
         
         <button class="papyrus-button shimmer back-button" id="backToGamesBtn">
@@ -824,9 +837,9 @@ async function startVoting(gameId) {
   try {
     if (!currentGame.isCreator) {
       showNotification('Только создатель может начать голосование', 'warning');
-      return;
-    }
-    
+    return;
+  }
+  
     const response = await fetch(`${API_URL}/games/${gameId}/startVoting`, {
       method: 'POST',
       headers: {
@@ -854,11 +867,11 @@ async function startVoting(gameId) {
 
 // Функция для показа экрана ответа на вопрос
 function showAnswerScreen(question) {
-  if (!currentGame || !currentGame.id) {
+    if (!currentGame || !currentGame.id) {
     showNotification('Ошибка: информация об игре потеряна', 'error');
-    return;
-  }
-  
+        return;
+    }
+
   console.log(`Показываем экран ответа на вопрос: "${question}"`);
   
   const answerQuestionText = document.getElementById('answerQuestionText');
@@ -869,7 +882,7 @@ function showAnswerScreen(question) {
   // Очищаем поле ввода ответа перед показом
   const answerInput = document.getElementById('answerInput');
   if (answerInput) {
-    answerInput.value = '';
+        answerInput.value = '';
   }
   
   showScreen('answerScreen');
@@ -1168,10 +1181,10 @@ async function checkGameStatus() {
     // Реагируем на изменение статуса
     if (statusChanged) {
       if (gameData.status === 'voting') {
-        showNotification('Началось голосование! Переходим к выбору лучших ответов.', 'info');
+      showNotification('Началось голосование! Переходим к выбору лучших ответов.', 'info');
         loadVotingOptions(currentGame.id);
       } else if (gameData.status === 'results') {
-        showNotification('Голосование завершено! Переходим к результатам.', 'success');
+      showNotification('Голосование завершено! Переходим к результатам.', 'success');
         loadResults(currentGame.id);
       }
     }
@@ -1267,11 +1280,11 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // Если мы внутри Telegram WebApp, готовим его
-  if (window.Telegram && window.Telegram.WebApp) {
+if (window.Telegram && window.Telegram.WebApp) {
     window.Telegram.WebApp.ready();
     // Настраиваем обработчик кнопки "Назад"
     window.Telegram.WebApp.BackButton.onClick(goBack);
-  }
+}
 });
 
 // Обработка ошибок
