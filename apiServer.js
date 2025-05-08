@@ -557,7 +557,7 @@ app.post('/api/games/:gameId/answer', (req, res) => {
       id: answerId,
       gameId: gameId,
       userId: userId,
-      text: answer,
+        text: answer,
       username: username || 'Анонимный участник',
       anonymous: anonymous === true,
       timestamp: Date.now(),
@@ -590,7 +590,7 @@ app.post('/api/games/:gameId/answer', (req, res) => {
     }
     
     return res.json({ 
-      status: 'success', 
+        status: 'success',
       message: 'Ответ успешно отправлен',
       answerId: answerId,
       answersCount: answersCount
@@ -635,48 +635,90 @@ app.get('/api/games/:gameId/check-answer', (req, res) => {
   }
 });
 
-// Новый метод для получения ответа пользователя
-app.get('/api/games/:gameId/user-answer', (req, res) => {
-  try {
-    const gameId = req.params.gameId;
-    const userId = req.query.userId;
-    
-    if (!gameId || !userId) {
-      return res.status(400).json({
-        status: 'error',
-        error: 'Не указан ID игры или пользователя'
-      });
-    }
-    
-    // Находим ответ пользователя
-    const userAnswer = db.get('answers')
-      .find({ gameId: gameId, userId: userId })
-      .value();
-    
-    if (!userAnswer) {
-      return res.json({
-        status: 'success',
-        hasAnswer: false,
-        answer: null
-      });
-    }
-    
-    return res.json({
-      status: 'success',
-      hasAnswer: true,
-      answer: userAnswer.text,
-      answerId: userAnswer.id
-    });
-  } catch (error) {
-    console.error('Ошибка при получении ответа пользователя:', error);
-    return res.status(500).json({
-      status: 'error',
-      error: 'Внутренняя ошибка сервера'
-    });
+// Маршрут для начала голосования
+app.post('/api/games/:gameId/startVoting', (req, res) => {
+  const gameId = req.params.gameId;
+  const { userId } = req.body;
+  
+  if (!gameId || !userId) {
+    return res.status(400).json({ error: 'Не указан ID игры или пользователя' });
   }
+  
+  const games = gameManager.getGames();
+  const game = games[gameId];
+  
+  if (!game) {
+    return res.status(404).json({ error: 'Игра не найдена' });
+  }
+  
+  // Проверяем, является ли пользователь создателем игры
+  if (game.initiator !== userId) {
+    return res.status(403).json({ error: 'Только создатель игры может начать голосование' });
+  }
+  
+  // Проверяем статус игры
+  if (game.status !== 'collecting_answers') {
+    return res.status(400).json({ error: 'Голосование можно начать только в режиме сбора ответов' });
+  }
+  
+  // Проверяем, есть ли минимальное количество ответов
+  const answersCount = Object.keys(game.answers || {}).length;
+  if (answersCount < 3) {
+    return res.status(400).json({ error: 'Для начала голосования требуется минимум 3 ответа' });
+  }
+  
+  // Начинаем голосование
+  game.status = 'voting';
+  gameManager.setGame(gameId, game);
+  
+  // Удаляем все напоминания для этой игры
+  const reminders = gameManager.getReminders();
+  Object.keys(reminders).forEach(reminderId => {
+    if (reminders[reminderId].gameId === gameId) {
+      console.log(`Удаляем напоминание ${reminderId} для игры ${gameId}, так как голосование уже начато через API`);
+      gameManager.deleteReminder(reminderId);
+    }
+  });
+  
+  console.log(`Голосование начато для игры ${gameId} пользователем ${userId}`);
+  
+  // Пытаемся отправить уведомления участникам через бота
+  try {
+    if (Array.isArray(game.participants)) {
+      const webAppUrl = process.env.WEB_APP_URL || 'https://t.me/PapaTrubokBot/app';
+      
+      game.participants.forEach(participantId => {
+        if (participantId && typeof participantId === 'string' && participantId.length > 0) {
+          try {
+            bot.telegram.sendMessage(
+              participantId,
+              `🎯 Голосование началось!\n\nСоздатель игры начал голосование по вопросу:\n"${game.currentQuestion}"\n\nОткройте мини-приложение, чтобы проголосовать!`,
+              {
+                parse_mode: 'HTML',
+                reply_markup: {
+                  inline_keyboard: [
+                    [{ text: 'Открыть голосование', web_app: { url: webAppUrl } }]
+                  ]
+                }
+              }
+            ).catch(error => {
+              console.warn(`Не удалось отправить уведомление участнику ${participantId}:`, error.message);
+            });
+          } catch (e) {
+            console.error(`Не удалось отправить уведомление участнику ${participantId}:`, e);
+          }
+        }
+      });
+    }
+  } catch (notifyError) {
+    console.error('Ошибка при отправке уведомлений участникам:', notifyError);
+    // Продолжаем работу даже при ошибке отправки уведомлений
+  }
+  
+  return res.json({ success: true, message: 'Голосование успешно начато' });
 });
 
-// Отправить голоса
+// Маршрут для голосования
 app.post('/api/games/:gameId/vote', (req, res) => {
   const gameId = req.params.gameId;
   const { userId, votedFor } = req.body;
@@ -1010,4 +1052,75 @@ app.get('/api/games/:gameId/answers-count', (req, res) => {
       error: 'Внутренняя ошибка сервера'
     });
   }
+});
+
+// Маршрут для получения ответа пользователя
+app.get('/api/games/:gameId/user-answer', (req, res) => {
+  const gameId = req.params.gameId;
+  const userId = req.query.userId;
+  
+  if (!gameId || !userId) {
+    return res.status(400).json({ error: 'Не указан ID игры или пользователя' });
+  }
+  
+  const games = gameManager.getGames();
+  const game = games[gameId];
+  
+  if (!game) {
+    return res.status(404).json({ error: 'Игра не найдена' });
+  }
+  
+  // Проверяем, есть ли ответ пользователя
+  const userAnswer = game.answers && game.answers[userId];
+  
+  if (!userAnswer) {
+    return res.status(404).json({ error: 'Ответ не найден' });
+  }
+  
+  return res.json({ answer: userAnswer.text });
+});
+
+// Маршрут для получения ответов для голосования
+app.get('/api/games/:gameId/answers', (req, res) => {
+  const gameId = req.params.gameId;
+  const userId = req.query.userId;
+  
+  if (!gameId || !userId) {
+    return res.status(400).json({ error: 'Не указан ID игры или пользователя' });
+  }
+  
+  const games = gameManager.getGames();
+  const game = games[gameId];
+  
+  if (!game) {
+    return res.status(404).json({ error: 'Игра не найдена' });
+  }
+  
+  // Проверяем статус игры
+  if (game.status !== 'voting') {
+    return res.status(400).json({ error: 'Получить ответы для голосования можно только в режиме голосования' });
+  }
+  
+  const answersData = [];
+  
+  // Формируем список ответов
+  if (game.answers) {
+    for (const [answerId, answer] of Object.entries(game.answers)) {
+      // Пропускаем ответ текущего пользователя
+      if (answerId === userId) continue;
+      
+      answersData.push({
+        id: answerId,
+        text: answer.text,
+        username: answer.username || 'Анонимный участник',
+        anonymous: answer.anonymous || false
+      });
+    }
+  }
+  
+  return res.json({
+    success: true,
+    question: game.currentQuestion,
+    answers: answersData
+  });
 }); 
