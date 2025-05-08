@@ -140,7 +140,35 @@ try {
 // Middlewares
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, 'public')));
+
+// Проверяем наличие директории public
+const publicDir = path.join(__dirname, 'public');
+if (fs.existsSync(publicDir)) {
+  console.log(`Статические файлы будут обслуживаться из директории: ${publicDir}`);
+  app.use(express.static(publicDir));
+} else {
+  console.warn(`Директория статических файлов не найдена по пути: ${publicDir}`);
+  
+  // Проверяем альтернативные пути
+  const altPaths = [
+    path.join(process.cwd(), 'public'),
+    path.join(process.cwd(), 'src', 'public')
+  ];
+  
+  let found = false;
+  for (const altPath of altPaths) {
+    if (fs.existsSync(altPath)) {
+      console.log(`Найдена альтернативная директория статических файлов: ${altPath}`);
+      app.use(express.static(altPath));
+      found = true;
+      break;
+    }
+  }
+  
+  if (!found) {
+    console.error('Не удалось найти директорию со статическими файлами!');
+  }
+}
 
 // Загружаем данные
 gameManager.loadGames();
@@ -983,7 +1011,48 @@ app.get('/ping', (req, res) => {
 
 // Обработка запроса к корню
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'papyrus.html'));
+  const htmlPath = path.join(__dirname, 'public', 'papyrus.html');
+  
+  if (fs.existsSync(htmlPath)) {
+    console.log(`Отправка файла: ${htmlPath}`);
+    res.sendFile(htmlPath);
+  } else {
+    console.warn(`Файл не найден: ${htmlPath}`);
+    
+    // Проверяем альтернативные пути
+    const altPaths = [
+      path.join(process.cwd(), 'public', 'papyrus.html'),
+      path.join(process.cwd(), 'src', 'public', 'papyrus.html')
+    ];
+    
+    for (const altPath of altPaths) {
+      if (fs.existsSync(altPath)) {
+        console.log(`Найден альтернативный путь к HTML: ${altPath}`);
+        return res.sendFile(altPath);
+      }
+    }
+    
+    // Если файл не найден, отправляем сообщение об ошибке
+    res.status(404).send(`
+      <html>
+        <head>
+          <title>Ошибка 404 - Файл не найден</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
+            h1 { color: #FF5722; }
+            pre { background: #f4f4f4; padding: 15px; border-radius: 5px; }
+          </style>
+        </head>
+        <body>
+          <h1>Ошибка 404 - Файл не найден</h1>
+          <p>Не удалось найти файл papyrus.html.</p>
+          <p>Текущая директория: ${__dirname}</p>
+          <p>Проверенные пути:</p>
+          <pre>${htmlPath}\n${altPaths.join('\n')}</pre>
+        </body>
+      </html>
+    `);
+  }
 });
 
 // Обработка ошибок
