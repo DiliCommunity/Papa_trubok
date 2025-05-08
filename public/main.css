@@ -627,7 +627,7 @@ textarea.form-input {
     font-size: 2.2rem;
     font-weight: bold;
     letter-spacing: 2px;
-    text-shadow: 0 2px 8px rgba(19, 8, 8, 0.467), 0 1px 0 #ffffff, 0 0 2px var(--accent-gold);
+    text-shadow: 0 2px 8px rgba(19, 8, 8, 0.467), 0 1px 0 #f1ee08, 0 0 2px var(--accent-gold);
     margin-bottom: 0.5em;
     background: linear-gradient(90deg, var(--accent-gold), var(--accent-red), var(--accent-blue), var(--accent-gold));
     background-size: 200% 200%;
@@ -955,17 +955,23 @@ textarea.form-input {
     background: linear-gradient(135deg, #ffcc00, #ffb700);
     color: #7e5600;
     border: none;
-    padding: 10px 20px;
+    padding: 12px 24px;
     border-radius: 25px;
     cursor: pointer;
     font-weight: bold;
+    font-size: 1.1rem;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    margin: 0 auto;
+    display: block;
+    max-width: 300px;
+    width: 100%;
 }
 
 .answer-btn:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
+    background: linear-gradient(135deg, #ffd933, #ffbf1a);
 }
 
 .answer-btn:active {
@@ -1146,12 +1152,13 @@ textarea.form-input {
 }
 
 .user-answer-box {
-    background: rgba(255, 248, 234, 0.6);
+    background: rgba(255, 248, 234, 0.7);
     border: 1px solid var(--accent-color);
-    border-radius: 8px;
-    padding: 1rem;
-    margin: 1rem 0;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-radius: 12px;
+    padding: 15px;
+    margin: 10px 0;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+    text-align: center;
 }
 
 .user-answer-text {
@@ -1159,4 +1166,66 @@ textarea.form-input {
     font-style: italic;
     color: var(--accent-color);
     margin: 0.5rem 0;
+}
+
+/* Стили для секции ответа на вопрос */
+.answer-section {
+    background: linear-gradient(120deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05));
+    border-radius: 15px;
+    padding: 15px;
+    margin: 15px 0;
+    text-align: center;
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    border: 1px dashed rgba(255, 255, 255, 0.3);
+}
+
+.answer-btn {
+    background: linear-gradient(135deg, #ffcc00, #ffb700);
+    color: #7e5600;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 1.1rem;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    margin: 0 auto;
+    display: block;
+    max-width: 300px;
+    width: 100%;
+}
+
+.answer-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
+    background: linear-gradient(135deg, #ffd933, #ffbf1a);
+}
+
+.answer-btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.user-answer-box {
+    background: rgba(255, 248, 234, 0.7);
+    border: 1px solid var(--accent-color);
+    border-radius: 12px;
+    padding: 15px;
+    margin: 10px 0;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+    text-align: center;
+}
+
+@media (max-width: 480px) {
+    .answer-btn {
+        padding: 10px 20px;
+        font-size: 1rem;
+    }
+    
+    .answer-section {
+        padding: 10px;
+    }
 }

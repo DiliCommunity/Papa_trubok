@@ -651,12 +651,6 @@ async function joinGameRoom(gameId) {
   try {
     console.log(`Присоединяемся к игровой комнате: ${gameId}, пользователь: ${currentUser.id}`);
     
-    if (!currentUser.id) {
-      showNotification('Сначала нужно войти в систему', 'warning');
-      showScreen('authScreen');
-      return;
-    }
-    
     const response = await fetch(`${API_URL}/games/${gameId}?userId=${currentUser.id}`);
     if (!response.ok) {
       throw new Error('Не удалось загрузить информацию об игре');
@@ -665,125 +659,149 @@ async function joinGameRoom(gameId) {
     const gameData = await response.json();
     console.log('Получены данные игры:', gameData);
     
-    // Сохраняем данные текущей игры
-    currentGame = {
-      id: gameId,
-      question: gameData.currentQuestion,
-      status: gameData.status,
-      isCreator: gameData.initiator === currentUser.id,
-      answersCount: gameData.answersCount || 0
-    };
-    
-    // Отображаем информацию о игре
-    document.getElementById('roomTitle').textContent = `Комната игры: ${gameId}`;
-    document.getElementById('roomQuestion').textContent = gameData.currentQuestion;
-    document.getElementById('roomStatus').textContent = getStatusText(gameData.status);
-    document.getElementById('roomAnswersCount').textContent = currentGame.answersCount;
-    
     // Проверяем, ответил ли пользователь на вопрос
     const answeredResponse = await fetch(`${API_URL}/games/${gameId}/check-answer?userId=${currentUser.id}`);
     const answeredData = await answeredResponse.json();
     const hasAnswered = answeredData.hasAnswered;
-    console.log(`Пользователь уже ответил: ${hasAnswered}`);
+    console.log(`Пользователь уже ответил на вопрос: ${hasAnswered}`);
     
-    // Получаем пользовательский ответ, если он уже ответил
+    // Если пользователь ответил, получаем его ответ
     let userAnswer = '';
     if (hasAnswered) {
       const userAnswerResponse = await fetch(`${API_URL}/games/${gameId}/user-answer?userId=${currentUser.id}`);
       if (userAnswerResponse.ok) {
         const userAnswerData = await userAnswerResponse.json();
-        userAnswer = userAnswerData.answer;
+        userAnswer = userAnswerData.answer || '';
+        console.log(`Ответ пользователя: "${userAnswer}"`);
       }
     }
     
-    // Показываем соответствующие кнопки в зависимости от состояния игры и роли пользователя
-    const answerButton = document.getElementById('answerButton');
-    const viewAnswersButton = document.getElementById('viewAnswersButton');
-    const startVotingButton = document.getElementById('startVotingButton');
-    const leaveRoomButton = document.getElementById('leaveRoomButton');
-    const userAnswerDisplay = document.getElementById('userAnswerDisplay');
+    // Сохраняем информацию о текущей игре глобально
+    currentGame = {
+      id: gameId,
+      isCreator: gameData.isCreator,
+      question: gameData.currentQuestion,
+      status: gameData.status,
+      participants: gameData.participants,
+      answersCount: gameData.answers,
+      userAnswer: userAnswer
+    };
     
-    // Сначала скрываем все кнопки и удаляем предыдущие обработчики
-    if (answerButton) {
-      answerButton.style.display = 'none';
-      answerButton.replaceWith(answerButton.cloneNode(true));
-    }
+    const gamesList = document.getElementById('gamesList');
+    if (!gamesList) return;
     
-    if (viewAnswersButton) {
-      viewAnswersButton.style.display = 'none';
-      viewAnswersButton.replaceWith(viewAnswersButton.cloneNode(true));
-    }
+    gamesList.innerHTML = '';
     
-    if (startVotingButton) {
-      startVotingButton.style.display = 'none';
-      startVotingButton.replaceWith(startVotingButton.cloneNode(true));
-    }
+    const gameRoom = document.createElement('div');
+    gameRoom.className = 'game-room';
     
-    if (userAnswerDisplay) {
-      userAnswerDisplay.style.display = 'none';
-    }
+    const isCreator = gameData.isCreator;
+    const answersCount = gameData.answers;
+    const canStartVoting = isCreator && answersCount >= 3 && gameData.status === 'collecting_answers';
     
-    // Переопределяем обработчики
-    const newAnswerButton = document.getElementById('answerButton');
-    const newViewAnswersButton = document.getElementById('viewAnswersButton');
-    const newStartVotingButton = document.getElementById('startVotingButton');
-    
-    // Показываем кнопки в зависимости от состояния игры
-    if (gameData.status === 'collecting_answers') {
-      // Если пользователь еще не ответил, показываем кнопку ответа всем участникам
-      if (!hasAnswered) {
-        if (newAnswerButton) {
-          newAnswerButton.style.display = 'block';
-          newAnswerButton.addEventListener('click', () => showAnswerScreen(gameData.currentQuestion));
-        }
-      } else {
-        // Если пользователь уже ответил, показываем его ответ
-        if (userAnswerDisplay) {
-          userAnswerDisplay.innerHTML = `
-            <div class="user-answer-box">
-              <p><strong>Ваш ответ принят:</strong></p>
-              <p class="user-answer-text">${userAnswer}</p>
-            </div>
-          `;
-          userAnswerDisplay.style.display = 'block';
-        }
-      }
+    gameRoom.innerHTML = `
+      <div class="game-room-header">
+        <h2 class="game-room-title">Комната #${gameId}</h2>
+        <span class="game-room-status">${getStatusText(gameData.status)}</span>
+      </div>
       
-      // Если пользователь - создатель игры, показываем кнопку начала голосования
-      if (currentGame.isCreator) {
-        // Проверяем количество ответов
-        // Если есть минимум 3 ответа, показываем кнопку начала голосования
-        if (currentGame.answersCount >= 3 && newStartVotingButton) {
-          newStartVotingButton.style.display = 'block';
-          newStartVotingButton.addEventListener('click', () => startVoting(gameId));
-        }
-      }
-    } else if (gameData.status === 'voting') {
-      // Если идет голосование, показываем кнопку просмотра ответов
-      if (newViewAnswersButton) {
-        newViewAnswersButton.style.display = 'block';
-        newViewAnswersButton.addEventListener('click', () => showVotingScreen(gameId));
-      }
-    } else if (gameData.status === 'completed') {
-      // Если игра завершена, показываем кнопку просмотра результатов
-      if (newViewAnswersButton) {
-        newViewAnswersButton.textContent = 'Посмотреть результаты';
-        newViewAnswersButton.style.display = 'block';
-        newViewAnswersButton.addEventListener('click', () => showResultsScreen(gameId));
-      }
+      <div class="question-box">
+        <h3>Вопрос:</h3>
+        <p class="question-text">${gameData.currentQuestion || 'Ожидание вопроса от создателя'}</p>
+      </div>
+      
+      <div class="game-room-info">
+        <div class="game-room-players">
+          <span class="game-room-player">Игроков: ${gameData.participants}</span>
+          <span class="game-room-player">Ответов: ${answersCount}</span>
+        </div>
+      </div>
+      
+      ${gameData.status === 'collecting_answers' ? `
+        <div class="answer-section">
+          ${!hasAnswered ? `
+            <button id="roomAnswerBtn" class="answer-btn">
+              Ответить на вопрос
+            </button>
+          ` : `
+            <div class="user-answer-box">
+              <p style="color: #2a9d8f; font-weight: bold; margin-bottom: 10px;">Ваш ответ принят!</p>
+              <p style="color: #5a2d0c; font-style: italic;">"${userAnswer}"</p>
+              <p style="margin-top: 10px; color: #457b9d;">Ожидайте начала голосования.</p>
+            </div>
+          `}
+        </div>
+      ` : ''}
+      
+      ${isCreator && gameData.status === 'collecting_answers' ? `
+        <div class="creator-controls">
+          <h3>Управление игрой</h3>
+          ${canStartVoting ? `
+            <button class="start-voting-btn" id="startVotingBtn">
+              Начать голосование
+            </button>
+          ` : answersCount < 3 ? `
+            <p style="color: #e63946; margin: 10px 0;">Для начала голосования нужно минимум 3 ответа (сейчас: ${answersCount})</p>
+          ` : ''}
+        </div>
+      ` : ''}
+      
+      <div class="game-room-actions">
+        ${gameData.status === 'voting' ? `
+          <button class="join-room-btn" id="goToVotingBtn">
+            Перейти к голосованию
+          </button>
+        ` : ''}
+        
+        ${gameData.status === 'results' ? `
+          <button class="join-room-btn" id="viewResultsBtn">
+            Посмотреть результаты
+          </button>
+        ` : ''}
+        
+        <button class="papyrus-button shimmer back-button" id="backToGamesBtn">
+          Вернуться к списку игр
+        </button>
+      </div>
+    `;
+    
+    gamesList.appendChild(gameRoom);
+    
+    // Добавляем обработчики событий для кнопок
+    const roomAnswerBtn = document.getElementById('roomAnswerBtn');
+    if (roomAnswerBtn) {
+      roomAnswerBtn.addEventListener('click', () => showAnswerScreen(gameData.currentQuestion));
     }
     
-    // Всегда показываем кнопку выхода из комнаты
-    if (leaveRoomButton) {
-      leaveRoomButton.style.display = 'block';
+    const startVotingBtn = document.getElementById('startVotingBtn');
+    if (startVotingBtn) {
+      startVotingBtn.addEventListener('click', () => startVoting(gameId));
     }
     
-    // Показываем экран комнаты
-    showScreen('roomScreen');
+    const goToVotingBtn = document.getElementById('goToVotingBtn');
+    if (goToVotingBtn) {
+      goToVotingBtn.addEventListener('click', () => loadVotingOptions(gameId));
+    }
     
+    const viewResultsBtn = document.getElementById('viewResultsBtn');
+    if (viewResultsBtn) {
+      viewResultsBtn.addEventListener('click', () => loadResults(gameId));
+    }
+    
+    const backToGamesBtn = document.getElementById('backToGamesBtn');
+    if (backToGamesBtn) {
+      backToGamesBtn.addEventListener('click', loadGames);
+    }
+    
+    // Показываем экран игры
+    showScreen('gameScreen');
+    
+    // Запускаем периодическую проверку статуса игры и обновление состояния комнаты
+    stopRoomUpdates(); // Сначала останавливаем предыдущие обновления, если они есть
+    startRoomUpdates(gameId); // Запускаем обновления для этой комнаты
   } catch (error) {
-    console.error('Ошибка при присоединении к комнате:', error);
-    showNotification(`Ошибка: ${error.message}`, 'error');
+    console.error('Ошибка при загрузке комнаты игры:', error);
+    showNotification('Не удалось загрузить информацию об игре', 'error');
   }
 }
 
