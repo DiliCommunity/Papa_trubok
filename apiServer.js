@@ -28,18 +28,81 @@ try {
     getAllGames: () => ({}),
     deleteGame: () => true,
     deleteUser: () => true,
-    get: (collection) => ({
-      find: () => ({
-        value: () => null,
-        assign: () => ({ write: () => {} })
-      }),
-      push: () => ({ write: () => {} }),
-      filter: () => ({
-        size: () => ({
-          value: () => 0
-        })
-      })
-    })
+    // Создаем внутреннее хранилище для имитации работы с коллекциями
+    _collections: {
+      users: [],
+      games: [],
+      answers: []
+    },
+    // Метод get для получения доступа к коллекции
+    get: function(collectionName) {
+      if (!this._collections[collectionName]) {
+        this._collections[collectionName] = [];
+      }
+      
+      return {
+        // Поиск объекта в коллекции
+        find: (query = {}) => {
+          const keys = Object.keys(query);
+          return {
+            value: () => {
+              if (keys.length === 0) return null;
+              return this._collections[collectionName].find(item => 
+                keys.every(key => item[key] === query[key])
+              ) || null;
+            },
+            // Обновление объекта
+            assign: (newData) => {
+              return {
+                write: () => {
+                  if (keys.length === 0) return;
+                  const index = this._collections[collectionName].findIndex(item => 
+                    keys.every(key => item[key] === query[key])
+                  );
+                  if (index !== -1) {
+                    this._collections[collectionName][index] = {
+                      ...this._collections[collectionName][index],
+                      ...newData
+                    };
+                  }
+                }
+              };
+            }
+          };
+        },
+        // Добавление объекта в коллекцию
+        push: (item) => {
+          return {
+            write: () => {
+              this._collections[collectionName].push(item);
+              return item;
+            }
+          };
+        },
+        // Фильтрация коллекции
+        filter: (query = {}) => {
+          const keys = Object.keys(query);
+          return {
+            size: () => {
+              return {
+                value: () => {
+                  if (keys.length === 0) return this._collections[collectionName].length;
+                  return this._collections[collectionName].filter(item => 
+                    keys.every(key => item[key] === query[key])
+                  ).length;
+                }
+              };
+            },
+            value: () => {
+              if (keys.length === 0) return this._collections[collectionName];
+              return this._collections[collectionName].filter(item => 
+                keys.every(key => item[key] === query[key])
+              );
+            }
+          };
+        }
+      };
+    }
   };
 }
 
@@ -594,17 +657,36 @@ app.post('/api/auth/register', (req, res) => {
       });
     }
     
-    // Создаем или обновляем запись о пользователе в базе данных
-    db.get('users')
-      .push({
-        id: userId,
-        name: name || 'Пользователь',
+    console.log(`Регистрация пользователя: ${userId}, ${name}, ${method}`);
+    
+    try {
+      // Создаем или обновляем запись о пользователе в базе данных
+      db.get('users')
+        .push({
+          id: userId,
+          name: name || 'Пользователь',
+          method,
+          metadata: metadata || {},
+          registeredAt: Date.now(),
+          lastLoginAt: Date.now()
+        })
+        .write();
+      
+      console.log(`Пользователь ${userId} успешно зарегистрирован`);
+    } catch (dbError) {
+      console.error('Ошибка при работе с базой данных:', dbError);
+      
+      // Если используется заглушка, просто записываем пользователя через userManager
+      userManager.setUser(userId, { 
+        funnyName: name || 'Пользователь',
         method,
         metadata: metadata || {},
         registeredAt: Date.now(),
         lastLoginAt: Date.now()
-      })
-      .write();
+      });
+      
+      console.log(`Пользователь ${userId} зарегистрирован через userManager (fallback)`);
+    }
     
     return res.json({ 
       status: 'success', 
@@ -625,6 +707,8 @@ app.post('/api/games/:gameId/answer', (req, res) => {
     const gameId = req.params.gameId;
     const { userId, answer, username, anonymous } = req.body;
     
+    console.log(`Получен ответ от пользователя ${userId} в игре ${gameId}: "${answer}"`);
+    
     // Проверяем наличие обязательных полей
     if (!userId || !answer) {
       return res.status(400).json({ 
@@ -633,30 +717,36 @@ app.post('/api/games/:gameId/answer', (req, res) => {
       });
     }
     
-    // Получаем игру из базы данных
-    const game = db.get('games').find({ id: gameId }).value();
+    // Проверяем существование игры
+    const games = gameManager.getGames();
+    const game = games[gameId];
     
     if (!game) {
+      console.error(`Игра ${gameId} не найдена`);
       return res.status(404).json({ 
         status: 'error', 
         error: 'Игра не найдена' 
       });
     }
     
-    // Проверяем, что игра находится в фазе сбора ответов
-    if (game.status !== 'collecting_answers') {
+    // Проверяем статус игры
+    if (game.status !== 'collecting_answers' && game.status !== 'waiting_players') {
+      console.error(`Игра ${gameId} не в режиме сбора ответов (текущий статус: ${game.status})`);
       return res.status(400).json({ 
         status: 'error', 
         error: 'Игра не находится в фазе сбора ответов' 
       });
     }
     
-    // Проверяем, не отвечал ли уже пользователь
-    const existingAnswer = db.get('answers')
-      .find({ gameId: gameId, userId: userId })
-      .value();
+    // Если игра в режиме ожидания игроков, переводим в режим сбора ответов
+    if (game.status === 'waiting_players') {
+      game.status = 'collecting_answers';
+      console.log(`Игра ${gameId} переведена в режим сбора ответов`);
+    }
     
-    if (existingAnswer) {
+    // Проверяем, не отвечал ли уже пользователь
+    if (game.answers && game.answers[userId]) {
+      console.error(`Пользователь ${userId} уже ответил на вопрос в игре ${gameId}`);
       return res.status(400).json({ 
         status: 'error', 
         error: 'Вы уже ответили на этот вопрос' 
@@ -664,47 +754,77 @@ app.post('/api/games/:gameId/answer', (req, res) => {
     }
     
     // Сохраняем ответ
-    const answerId = shortid.generate();
-    const newAnswer = {
-      id: answerId,
-      gameId: gameId,
-      userId: userId,
-        text: answer,
+    if (!game.answers) game.answers = {};
+    
+    game.answers[userId] = {
+      text: answer,
       username: username || 'Анонимный участник',
       anonymous: anonymous === true,
-      timestamp: Date.now(),
-      votes: 0
+      timestamp: Date.now()
     };
     
-    db.get('answers')
-      .push(newAnswer)
-      .write();
+    // Обновляем игру
+    gameManager.setGame(gameId, game);
     
-    // Обновляем количество ответов в игре
-    const answersCount = db.get('answers')
-      .filter({ gameId: gameId })
-      .size()
-      .value();
+    // Счетчик ответов
+    const answersCount = Object.keys(game.answers).length;
+    console.log(`Всего ответов в игре ${gameId}: ${answersCount}`);
     
-    // Если достигнуто 10 ответов, автоматически запускаем голосование
-    if (answersCount >= 10 && game.status === 'collecting_answers') {
-      db.get('games')
-        .find({ id: gameId })
-        .assign({ status: 'voting', updatedAt: Date.now() })
+    // Пытаемся также сохранить в db (если доступно)
+    try {
+      const answerId = shortid.generate();
+      const newAnswer = {
+        id: answerId,
+        gameId: gameId,
+        userId: userId,
+        text: answer,
+        username: username || 'Анонимный участник',
+        anonymous: anonymous === true,
+        timestamp: Date.now(),
+        votes: 0
+      };
+      
+      db.get('answers')
+        .push(newAnswer)
         .write();
       
-      // Уведомляем всех участников о начале голосования
-      io.to(gameId).emit('statusChanged', { 
-        gameId: gameId, 
-        status: 'voting',
-        message: 'Собрано 10 ответов! Начинаем голосование.'
-      });
+      console.log(`Ответ сохранен в базе данных с ID ${answerId}`);
+      
+      // Проверяем автоматический запуск голосования при достижении MAX_ANSWERS
+      if (answersCount >= MAX_ANSWERS && game.status === 'collecting_answers') {
+        game.status = 'voting';
+        gameManager.setGame(gameId, game);
+        
+        // Удаляем все напоминания для этой игры
+        const reminders = gameManager.getReminders();
+        Object.keys(reminders).forEach(reminderId => {
+          if (reminders[reminderId].gameId === gameId) {
+            console.log(`Удаляем напоминание ${reminderId} для игры ${gameId}, так как собрано максимальное количество ответов`);
+            gameManager.deleteReminder(reminderId);
+          }
+        });
+        
+        console.log(`Игра ${gameId} автоматически переведена в режим голосования (${answersCount}/${MAX_ANSWERS} ответов)`);
+        
+        // Уведомляем участников о начале голосования через socket.io
+        try {
+          io.to(gameId).emit('statusChanged', { 
+            gameId: gameId, 
+            status: 'voting',
+            message: `Собрано ${MAX_ANSWERS} ответов! Начинаем голосование.`
+          });
+        } catch (ioError) {
+          console.error('Ошибка при отправке уведомлений через socket.io:', ioError);
+        }
+      }
+    } catch (dbError) {
+      console.warn('Не удалось сохранить ответ в базе данных:', dbError);
+      // Продолжаем работу, так как ответ уже сохранен в gameManager
     }
     
     return res.json({ 
-        status: 'success',
+      status: 'success',
       message: 'Ответ успешно отправлен',
-      answerId: answerId,
       answersCount: answersCount
     });
   } catch (error) {
@@ -729,14 +849,34 @@ app.get('/api/games/:gameId/check-answer', (req, res) => {
       });
     }
     
-    // Проверяем, есть ли ответ от этого пользователя
-    const existingAnswer = db.get('answers')
-      .find({ gameId: gameId, userId: userId })
-      .value();
+    console.log(`Проверка ответа пользователя ${userId} в игре ${gameId}`);
+    
+    let hasAnswered = false;
+    
+    try {
+      // Проверяем, есть ли ответ от этого пользователя в db
+      const existingAnswer = db.get('answers')
+        .find({ gameId: gameId, userId: userId })
+        .value();
+      
+      hasAnswered = !!existingAnswer;
+    } catch (dbError) {
+      console.error('Ошибка при работе с базой данных:', dbError);
+      
+      // Если используется заглушка, проверяем через gameManager
+      const games = gameManager.getGames();
+      const game = games[gameId];
+      
+      if (game && game.answers && game.answers[userId]) {
+        hasAnswered = true;
+      }
+    }
+    
+    console.log(`Результат проверки ответа для пользователя ${userId}: ${hasAnswered}`);
     
     return res.json({
       status: 'success',
-      hasAnswered: !!existingAnswer
+      hasAnswered: hasAnswered
     });
   } catch (error) {
     console.error('Ошибка при проверке ответа пользователя:', error);
