@@ -671,6 +671,17 @@ async function joinGameRoom(gameId) {
       }
     }
     
+    // Сохраняем информацию о текущей игре глобально
+    currentGame = {
+      id: gameId,
+      isCreator: gameData.isCreator,
+      question: gameData.currentQuestion,
+      status: gameData.status,
+      participants: gameData.participants,
+      answersCount: gameData.answers,
+      userAnswer: userAnswer
+    };
+    
     const gamesList = document.getElementById('gamesList');
     if (!gamesList) return;
     
@@ -681,6 +692,7 @@ async function joinGameRoom(gameId) {
     
     const isCreator = gameData.isCreator;
     const answersCount = gameData.answers;
+    const canStartVoting = isCreator && answersCount >= 3 && gameData.status === 'collecting_answers';
     
     gameRoom.innerHTML = `
       <div class="game-room-header">
@@ -700,9 +712,22 @@ async function joinGameRoom(gameId) {
         </div>
       </div>
       
+      ${isCreator && gameData.status === 'collecting_answers' ? `
+        <div class="creator-controls">
+          <h3>Управление игрой</h3>
+          ${canStartVoting ? `
+            <button class="start-voting-btn" onclick="startVoting('${gameId}')">
+              Начать голосование
+            </button>
+          ` : answersCount < 3 ? `
+            <p style="color: #e63946; margin: 10px 0;">Для начала голосования нужно минимум 3 ответа (сейчас: ${answersCount})</p>
+          ` : ''}
+        </div>
+      ` : ''}
+      
       <div class="game-room-actions">
-        ${gameData.status === 'collecting_answers' && !hasAnswered ? `
-          <button class="answer-btn" onclick="joinGame('${gameId}'); showAnswerScreen(${JSON.stringify(gameData.currentQuestion)});">
+        ${gameData.status === 'collecting_answers' && !hasAnswered && !isCreator ? `
+          <button class="answer-btn" onclick="showAnswerScreen('${gameData.currentQuestion}')">
             Ответить на вопрос
           </button>
         ` : ''}
@@ -721,9 +746,11 @@ async function joinGameRoom(gameId) {
           </button>
         ` : ''}
         
-        <button class="viewer-btn" onclick="joinGame('${gameId}')">
-          ${gameData.status === 'collecting_answers' ? 'Присоединиться как зритель' : 'Присоединиться к игре'}
-        </button>
+        ${gameData.status === 'results' ? `
+          <button class="join-room-btn" onclick="loadResults('${gameId}')">
+            Посмотреть результаты
+          </button>
+        ` : ''}
         
         <button class="papyrus-button shimmer back-button" onclick="loadGames()">
           Вернуться к списку игр
@@ -732,10 +759,34 @@ async function joinGameRoom(gameId) {
     `;
     
     gamesList.appendChild(gameRoom);
+    
+    // Запускаем периодическую проверку статуса игры
+    startStatusCheck();
   } catch (error) {
     console.error('Ошибка при загрузке комнаты игры:', error);
     showNotification('Не удалось загрузить информацию об игре', 'error');
   }
+}
+
+// Функция для показа экрана ответа на вопрос
+function showAnswerScreen(question) {
+  if (!currentGame || !currentGame.id) {
+    showNotification('Ошибка: информация об игре потеряна', 'error');
+    return;
+  }
+  
+  const answerQuestionText = document.getElementById('answerQuestionText');
+  if (answerQuestionText) {
+    answerQuestionText.textContent = question;
+  }
+  
+  // Очищаем поле ввода ответа перед показом
+  const answerInput = document.getElementById('answerInput');
+  if (answerInput) {
+    answerInput.value = '';
+  }
+  
+  showScreen('answerScreen');
 }
 
 // Перевод статуса игры в читаемый текст
@@ -808,19 +859,6 @@ async function saveQuestion() {
     console.error('Ошибка создания игры:', error);
     showNotification('Произошла ошибка при создании игры. Пожалуйста, попробуйте еще раз.', 'error');
   }
-}
-
-// Функция для показа экрана ответа на вопрос
-function showAnswerScreen(question) {
-  const answerQuestionText = document.getElementById('answerQuestionText');
-  if (answerQuestionText) {
-    answerQuestionText.textContent = question;
-  }
-  
-  // Обновляем статус анонимности
-  updateAnonymousStatus();
-  
-  showScreen('answerScreen');
 }
 
 // Обновляем отображение статуса анонимности
@@ -1050,6 +1088,15 @@ async function loadVotingOptions(gameId) {
   }
   
   try {
+    // Сначала проверяем, голосовал ли пользователь
+    const voteCheckResponse = await fetch(`${API_URL}/games/${gameId}/check-vote?userId=${currentUser.id}`);
+    const voteCheckData = await voteCheckResponse.json();
+    
+    if (voteCheckData.hasVoted) {
+      showNotification('Вы уже проголосовали в этой игре. Ожидайте результатов.', 'info');
+      return;
+    }
+    
     const response = await fetch(`${API_URL}/games/${gameId}/answers?userId=${currentUser.id}`);
     
     if (!response.ok) {
