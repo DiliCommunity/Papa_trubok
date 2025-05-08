@@ -249,13 +249,8 @@ function completeAuth(authData) {
     // Обновляем интерфейс с учетом авторизации
     updateUIAfterAuth(authData);
     
-    // Переходим к экрану ввода имени вместо экрана запуска
-    showScreen('nameScreen');
-    
-    // Показываем опции выбора имени
-    if (typeof showNameChoiceOptions === 'function') {
-        showNameChoiceOptions();
-    }
+    // Переходим к экрану с правилами игры вместо экрана ввода имени
+    showScreen('startScreen');
 }
 
 // Обновление интерфейса после авторизации

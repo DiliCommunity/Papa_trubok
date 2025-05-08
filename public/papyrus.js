@@ -234,28 +234,13 @@ window.startApp = function() {
   if (window.Telegram && window.Telegram.WebApp) {
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
-    
-    // Настраиваем обработчик кнопки "Назад"
-    // Обработчик уже устанавливается в DOMContentLoaded, не дублируем его здесь
   }
   
-  // Проверяем, есть ли у пользователя сохраненные имена или данные Telegram
-  const telegramName = getTelegramUserName();
-  const savedNames = getSavedNames();
+  // Переходим к экрану ввода имени
+  showScreen('nameScreen');
   
-  if (savedNames.length > 0) {
-    // Если есть сохраненные имена, показываем экран выбора
-    showScreen('nameScreen');
-    showNameChoiceOptions();
-  } else if (telegramName) {
-    // Если есть имя из Telegram, предлагаем его использовать
-    showScreen('nameScreen');
-    showTelegramNameOption();
-  } else {
-    // Если нет ни сохраненных имен, ни данных Telegram, показываем форму для нового имени
-    showScreen('nameScreen');
-    showNewNameForm();
-  }
+  // Показываем опции выбора имени
+  showNameChoiceOptions();
 };
 
 // Обработчики для отслеживания состояния клавиатуры
@@ -1181,6 +1166,18 @@ async function checkIfAnswered(gameId) {
 // Регистрация всех обработчиков событий для кнопок
 document.addEventListener('DOMContentLoaded', function() {
   console.log('Инициализация приложения...');
+  
+  // Регистрация обработчика для кнопки "Начать игру" на экране правил
+  const startAppBtn = document.getElementById('startAppBtn');
+  if (startAppBtn) {
+    console.log('Найдена кнопка startAppBtn, добавляем обработчик');
+    startAppBtn.addEventListener('click', function() {
+      console.log('Нажата кнопка Начать игру на экране правил');
+      window.startApp();
+    });
+  } else {
+    console.warn('Кнопка startAppBtn не найдена');
+  }
   
   // Регистрация обработчиков для кнопок выбора имени
   const newNameBtn = document.getElementById('newNameBtn');
