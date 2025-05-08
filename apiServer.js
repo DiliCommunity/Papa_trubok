@@ -916,4 +916,25 @@ app.get('/api/games/:gameId/user-answer', (req, res) => {
   const userAnswer = game.answers && game.answers[userId] ? game.answers[userId].text : '';
   
   res.json({ answer: userAnswer });
+});
+
+// Проверка, голосовал ли пользователь в игре
+app.get('/api/games/:gameId/check-vote', (req, res) => {
+  const gameId = req.params.gameId;
+  const userId = req.query.userId;
+  
+  if (!userId) {
+    return res.status(400).json({ error: 'Не указан ID пользователя' });
+  }
+  
+  const games = gameManager.getGames();
+  const game = games[gameId];
+  
+  if (!game) {
+    return res.status(404).json({ error: 'Игра не найдена' });
+  }
+  
+  const hasVoted = game.votes && game.votes[userId];
+  
+  res.json({ hasVoted: !!hasVoted });
 }); 
