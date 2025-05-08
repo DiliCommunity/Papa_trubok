@@ -652,15 +652,36 @@ textarea.form-input {
 }
 
 .rules h2 {
-    color: var(--accent-gold);
-    font-size: 1.3em;
-    margin-bottom: 0.5em;
+    color: #9C4A1A;
+    font-size: 1.4em;
+    margin-bottom: 0.8em;
     text-shadow: 0 1px 0 #fff, 0 0 2px var(--accent-gold);
+    text-align: center;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+.rules ol {
+    padding-left: 1.5em;
 }
 
 .rules li {
-    margin-bottom: 0.7em;
-    line-height: 1.5;
+    margin-bottom: 0.9em;
+    line-height: 1.6;
+    color: #5a2d0c;
+    font-weight: 500;
+}
+
+.rules ul {
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+    padding-left: 1.5em;
+}
+
+.rules ul li {
+    margin-bottom: 0.5em;
+    list-style-type: disc;
+    color: #774423;
 }
 
 /* --- Переливающиеся shimmer-кнопки --- */

@@ -40,7 +40,7 @@ if (!window.Telegram || !window.Telegram.WebApp) {
 let currentUser = {
   id: getTelegramUserId(),
   name: '',
-  anonymous: false
+  anonymous: false // Всегда будет false
 };
 let currentGame = null;
 let navigationHistory = []; // История навигации для кнопки "Назад"
@@ -315,29 +315,10 @@ document.addEventListener('DOMContentLoaded', function() {
   setupAnonymousRegistration();
 });
 
-// Настраиваем интерфейс для анонимной регистрации
+// Отключаем функцию setupAnonymousRegistration, заменяя её на заглушку
 function setupAnonymousRegistration() {
-  const newNameSection = document.getElementById('newNameSection');
-  if (newNameSection) {
-    // Добавляем чекбокс для анонимной регистрации
-    const anonymousCheckbox = document.createElement('div');
-    anonymousCheckbox.className = 'anonymous-checkbox';
-    anonymousCheckbox.innerHTML = `
-      <label for="anonymousCheck">
-        <input type="checkbox" id="anonymousCheck"> 
-        Участвовать анонимно (другие игроки не увидят ваше имя)
-      </label>
-    `;
-    newNameSection.appendChild(anonymousCheckbox);
-    
-    // Добавляем обработчик для чекбокса
-    const checkbox = document.getElementById('anonymousCheck');
-    if (checkbox) {
-      checkbox.addEventListener('change', function(e) {
-        currentUser.anonymous = e.target.checked;
-      });
-    }
-  }
+  // Анонимность отключена
+  console.log('Анонимное голосование отключено');
 }
 
 // Функция для отображения опции использования имени из Telegram
@@ -569,7 +550,7 @@ function saveNamesToStorage(names) {
   }
 }
 
-// Сохранение имени пользователя
+// Обновляем функцию saveName, чтобы всегда устанавливать anonymous в false
 function saveName() {
   const nameInput = document.getElementById('nameInput');
   if (!nameInput) {
@@ -584,9 +565,8 @@ function saveName() {
     return;
   }
   
-  // Проверяем состояние чекбокса анонимности
-  const anonymousCheck = document.getElementById('anonymousCheck');
-  const anonymous = anonymousCheck ? anonymousCheck.checked : false;
+  // Анонимность всегда отключена
+  const anonymous = false;
   
   console.log(`Сохраняем имя: ${name}, анонимно: ${anonymous}`);
   currentUser.name = name;
@@ -1287,3 +1267,211 @@ async function loadResults(gameId) {
     showNotification('Не удалось загрузить результаты голосования. Пожалуйста, попробуйте позже.', 'error');
   }
 }
+
+// Запуск голосования
+async function startVoting(gameId) {
+  if (!gameId) {
+    if (!currentGame || !currentGame.id) {
+      showNotification('Ошибка: ID игры не найден', 'warning');
+      return;
+    }
+    gameId = currentGame.id;
+  }
+  
+  try {
+    const response = await fetch(`${API_URL}/games/${gameId}/startVoting`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userId: currentUser.id
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Ошибка HTTP: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    showNotification('Голосование успешно запущено!', 'success');
+    
+    // Обновляем статус текущей игры
+    if (currentGame && currentGame.id === gameId) {
+      currentGame.status = 'voting';
+    }
+    
+    // Загружаем варианты для голосования
+    loadVotingOptions(gameId);
+  } catch (error) {
+    console.error('Ошибка запуска голосования:', error);
+    showNotification('Произошла ошибка при запуске голосования. Пожалуйста, попробуйте еще раз.', 'error');
+  }
+}
+
+// Периодически проверяем статус игры
+let statusCheckInterval = null;
+
+function startStatusCheck() {
+  if (statusCheckInterval) {
+    clearInterval(statusCheckInterval);
+  }
+  
+  // Сначала запускаем немедленную проверку
+  if (currentGame && currentGame.id) {
+    checkGameStatus();
+  }
+  
+  // Затем настраиваем периодическую проверку
+  statusCheckInterval = setInterval(() => {
+    if (currentGame && currentGame.id) {
+      checkGameStatus();
+    } else {
+      // Если больше нет активной игры, останавливаем проверку
+      clearInterval(statusCheckInterval);
+      statusCheckInterval = null;
+    }
+  }, 5000); // Проверка каждые 5 секунд
+  
+  console.log('Запущена периодическая проверка статуса игры');
+}
+
+// Улучшенная функция проверки статуса игры
+async function checkGameStatus() {
+  if (!currentGame || !currentGame.id) {
+    console.error('Нет активной игры для проверки статуса');
+    return;
+  }
+  
+  try {
+    const response = await fetch(`${API_URL}/games/${currentGame.id}?_=${Date.now()}`);
+    
+    if (!response.ok) {
+      console.warn(`Ошибка при проверке статуса игры: ${response.status} ${response.statusText}`);
+      return;
+    }
+    
+    const gameData = await response.json();
+    
+    // Проверяем, изменился ли статус
+    const statusChanged = gameData.status !== currentGame.status;
+    
+    // Обновляем локальный статус игры
+    currentGame.status = gameData.status;
+    
+    console.log(`Статус игры ${currentGame.id}: ${gameData.status}, изменился: ${statusChanged}`);
+    
+    // Реагируем на изменение статуса
+    if (statusChanged) {
+      if (gameData.status === 'voting') {
+        showNotification('Началось голосование! Переходим к выбору лучших ответов.', 'info');
+        loadVotingOptions(currentGame.id);
+      } else if (gameData.status === 'results') {
+        showNotification('Голосование завершено! Переходим к результатам.', 'success');
+        loadResults(currentGame.id);
+      }
+    }
+  } catch (error) {
+    console.error('Ошибка при проверке статуса игры:', error);
+    
+    // Дополнительно проверяем сетевое соединение
+    if (!navigator.onLine) {
+      showNotification('Отсутствует подключение к интернету. Проверьте ваше соединение.', 'error');
+    }
+  }
+}
+
+// Добавим функцию для проверки было ли уже отвечено на вопрос
+async function checkIfAnswered(gameId) {
+    try {
+        const response = await fetch(`${API_URL}/games/${gameId}/check-answer?userId=${currentUser.id}`);
+        
+        if (!response.ok) {
+            return false;
+        }
+        
+        const data = await response.json();
+        return data.hasAnswered;
+    } catch (error) {
+        console.error('Ошибка при проверке ответа:', error);
+        return false;
+    }
+}
+
+// Регистрация всех обработчиков событий для кнопок
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('Инициализация приложения...');
+  
+  // Регистрация обработчиков для кнопок выбора имени
+  const newNameBtn = document.getElementById('newNameBtn');
+  if (newNameBtn) {
+    newNameBtn.addEventListener('click', showNewNameForm);
+  }
+  
+  const existingNameBtn = document.getElementById('existingNameBtn');
+  if (existingNameBtn) {
+    existingNameBtn.addEventListener('click', showExistingNames);
+  }
+  
+  // Регистрация обработчиков для кнопок "Назад"
+  const backButtons = [
+    { id: 'backToNameChoiceBtn', action: showNameChoiceOptions },
+    { id: 'backToNameChoiceFromExistingBtn', action: showNameChoiceOptions },
+    { id: 'backToStartBtn', action: () => showScreen('startScreen') },
+    { id: 'backToMainFromQuestionBtn', action: () => showScreen('gameScreen') },
+    { id: 'backToMainFromAnswerBtn', action: () => showScreen('gameScreen') },
+    { id: 'backToMainFromVotingBtn', action: () => showScreen('gameScreen') },
+    { id: 'backToMainBtn', action: () => showScreen('gameScreen') }
+  ];
+  
+  backButtons.forEach(button => {
+    const element = document.getElementById(button.id);
+    if (element) {
+      element.addEventListener('click', button.action);
+    }
+  });
+  
+  // Регистрация обработчиков для функциональных кнопок
+  const submitNameBtn = document.getElementById('submitNameBtn');
+  if (submitNameBtn) {
+    submitNameBtn.addEventListener('click', saveName);
+  }
+  
+  const createGameBtn = document.getElementById('createGameBtn');
+  if (createGameBtn) {
+    createGameBtn.addEventListener('click', createNewGame);
+  }
+  
+  const refreshGamesBtn = document.getElementById('refreshGamesBtn');
+  if (refreshGamesBtn) {
+    refreshGamesBtn.addEventListener('click', loadGames);
+  }
+  
+  const submitQuestionBtn = document.getElementById('submitQuestionBtn');
+  if (submitQuestionBtn) {
+    submitQuestionBtn.addEventListener('click', saveQuestion);
+  }
+  
+  const submitAnswerBtn = document.getElementById('submitAnswerBtn');
+  if (submitAnswerBtn) {
+    submitAnswerBtn.addEventListener('click', submitAnswer);
+  }
+  
+  const submitVotesBtn = document.getElementById('submitVotesBtn');
+  if (submitVotesBtn) {
+    submitVotesBtn.addEventListener('click', submitVotes);
+  }
+
+  // Если мы внутри Telegram WebApp, готовим его
+  if (window.Telegram && window.Telegram.WebApp) {
+    window.Telegram.WebApp.ready();
+    // Настраиваем обработчик кнопки "Назад"
+    window.Telegram.WebApp.BackButton.onClick(goBack);
+  }
+});
+
+// Обработка ошибок
+window.addEventListener('error', function(event) {
+  console.error('Глобальная ошибка:', event.error || event.message);
+});
