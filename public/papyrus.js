@@ -3,6 +3,48 @@ const API_URL = window.location.origin + '/api';
 
 console.log("papyrus.js загружен");
 
+// Функция проверки авторизации
+function checkAuth() {
+  try {
+    const authData = localStorage.getItem('papaTrubokAuth');
+    if (!authData) {
+      console.log('Пользователь не авторизован, перенаправление на страницу регистрации');
+      window.location.href = 'register.html';
+      return false;
+    }
+    
+    // Проверка валидности данных авторизации
+    const parsedAuthData = JSON.parse(authData);
+    if (!parsedAuthData || !parsedAuthData.userId || !parsedAuthData.method) {
+      console.log('Данные авторизации недействительны, перенаправление на страницу регистрации');
+      localStorage.removeItem('papaTrubokAuth');
+      window.location.href = 'register.html';
+      return false;
+    }
+    
+    // Устанавливаем данные текущего пользователя из сохраненной авторизации
+    if (parsedAuthData.userId) {
+      window.currentUser = window.currentUser || {};
+      window.currentUser.id = parsedAuthData.userId;
+      if (parsedAuthData.name) {
+        window.currentUser.name = parsedAuthData.name;
+      }
+    }
+    
+    console.log('Пользователь авторизован:', parsedAuthData.method);
+    return true;
+  } catch (error) {
+    console.error('Ошибка при проверке авторизации:', error);
+    window.location.href = 'register.html';
+    return false;
+  }
+}
+
+// Проверяем авторизацию при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+  checkAuth();
+});
+
 // Правильное определение объекта Telegram WebApp
 // Если мы внутри Telegram WebApp, используем его объект, иначе создаем заглушку
 if (!window.Telegram || !window.Telegram.WebApp) {
@@ -237,10 +279,10 @@ window.startApp = function() {
   }
   
   // Переходим к экрану ввода имени
-  showScreen('nameScreen');
+    showScreen('nameScreen');
   
   // Показываем опции выбора имени
-  showNameChoiceOptions();
+    showNameChoiceOptions();
 };
 
 // Обработчики для отслеживания состояния клавиатуры
@@ -749,8 +791,8 @@ async function joinGameRoom(gameId) {
               <p style="color: #2a9d8f; font-weight: bold; margin-bottom: 10px;">Ваш ответ принят!</p>
               <p style="color: #5a2d0c; font-style: italic;">"${currentGame.userAnswer}"</p>
               <p style="margin-top: 10px; color: #457b9d;">Ожидайте начала голосования.</p>
-            </div>
-          `;
+      </div>
+    `;
         }
       } else {
         userAnswerDisplay.style.display = 'none';
@@ -1167,13 +1209,19 @@ async function checkIfAnswered(gameId) {
 document.addEventListener('DOMContentLoaded', function() {
   console.log('Инициализация приложения...');
   
+  // Проверяем авторизацию перед инициализацией приложения
+  if (!checkAuth()) return;
+  
   // Регистрация обработчика для кнопки "Начать игру" на экране правил
   const startAppBtn = document.getElementById('startAppBtn');
   if (startAppBtn) {
     console.log('Найдена кнопка startAppBtn, добавляем обработчик');
     startAppBtn.addEventListener('click', function() {
       console.log('Нажата кнопка Начать игру на экране правил');
-      window.startApp();
+      // Переходим к экрану ввода имени
+      showScreen('nameScreen');
+      // Показываем опции выбора имени
+      showNameChoiceOptions();
     });
   } else {
     console.warn('Кнопка startAppBtn не найдена');

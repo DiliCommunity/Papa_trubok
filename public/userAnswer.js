@@ -25,87 +25,121 @@ function showAnswerScreen(question) {
   showScreen('answerScreen');
 }
 
-// Обновленная функция отправки ответа
+// Отправка ответа на вопрос
 async function submitAnswer() {
-    console.log("Попытка отправки ответа");
+  // Получаем текст ответа
+  const answerInput = document.getElementById('answerInput');
+  if (!answerInput) {
+    showNotification('Ошибка: поле для ввода ответа не найдено', 'error');
+    return;
+  }
+  
+  const answer = answerInput.value.trim();
+  if (answer.length < 2) {
+    showNotification('Ответ должен содержать минимум 2 символа', 'warning');
+    return;
+  }
+  
+  // Проверяем, что есть информация о текущей игре и пользователе
+  if (!window.currentGame || !window.currentGame.id) {
+    showNotification('Ошибка: информация об игре отсутствует', 'error');
+    return;
+  }
+  
+  if (!window.currentUser || !window.currentUser.id) {
+    showNotification('Ошибка: информация о пользователе отсутствует', 'error');
+    return;
+  }
+  
+  try {
+    console.log(`Отправка ответа: ${answer}`);
     
-    if (!currentGame || !currentGame.id) {
-        console.error("Нет активной игры для отправки ответа");
-        showNotification('Ошибка: игра не найдена', 'error');
-        return;
-    }
-
-    console.log(`Отправляем ответ для игры ${currentGame.id}`);
-    
-    const answerInput = document.getElementById('answerInput');
-    if (!answerInput) {
-        console.error("Элемент ввода ответа не найден");
-        showNotification('Ошибка: элемент ввода не найден', 'error');
-        return;
+    // Отключаем кнопку отправки на время запроса
+    const submitBtn = document.getElementById('submitAnswerBtn');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Отправка...';
     }
     
-    const answer = answerInput.value.trim();
-    if (!answer) {
-        console.log("Пустой ответ");
-        showNotification('Пожалуйста, введите ответ', 'warning');
-        return;
+    const response = await fetch(`${API_URL}/games/${window.currentGame.id}/answer`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userId: window.currentUser.id,
+        answer: answer,
+        username: window.currentUser.name,
+        anonymous: false // Анонимный режим отключен
+      })
+    });
+    
+    // Восстанавливаем кнопку
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Отправить ответ';
     }
-
-    try {
-        console.log(`Отправляем ответ на сервер: "${answer}"`);
-        
-        const response = await fetch(`${API_URL}/games/${currentGame.id}/answer`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                userId: currentUser.id,
-                answer: answer,
-                username: currentUser.name,
-                anonymous: false // Всегда устанавливаем анонимность в false, так как эта функция удалена
-            })
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`Ошибка HTTP: ${response.status}, ${errorText}`);
-            throw new Error(`Ошибка при отправке ответа: ${response.status}`);
-        }
-
-        const data = await response.json();
-        console.log("Ответ успешно отправлен, ответ сервера:", data);
-        
-        // Сохраняем ответ пользователя в currentGame
-        currentGame.userAnswer = answer;
-        
-        showNotification('Ваш ответ успешно отправлен! Ожидайте голосования.', 'success');
-        answerInput.value = '';
-        
-        // Возвращаемся в комнату игры
-        showScreen('gameScreen');
-        joinGameRoom(currentGame.id);
-    } catch (error) {
-        console.error('Ошибка при отправке ответа:', error);
-        showNotification(`Произошла ошибка при отправке ответа: ${error.message}`, 'error');
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || `Ошибка при отправке ответа: ${response.status}`);
     }
+    
+    const result = await response.json();
+    console.log('Ответ успешно отправлен:', result);
+    
+    // Сохраняем ответ пользователя в текущей игре
+    window.currentGame.userAnswer = answer;
+    
+    // Показываем уведомление об успехе
+    showNotification('Ваш ответ успешно отправлен!', 'success');
+    
+    // Возвращаемся к экрану комнаты
+    showScreen('roomScreen');
+    
+    // Обновляем отображение ответа пользователя в комнате
+    const userAnswerDisplay = document.getElementById('userAnswerDisplay');
+    if (userAnswerDisplay) {
+      userAnswerDisplay.style.display = 'block';
+      userAnswerDisplay.innerHTML = `
+        <div class="user-answer-box">
+          <p style="color: #2a9d8f; font-weight: bold; margin-bottom: 10px;">Ваш ответ принят!</p>
+          <p style="color: #5a2d0c; font-style: italic;">"${answer}"</p>
+          <p style="margin-top: 10px; color: #457b9d;">Ожидайте начала голосования.</p>
+        </div>
+      `;
+    }
+    
+    // Скрываем кнопку ответа
+    const answerButton = document.getElementById('answerButton');
+    if (answerButton) {
+      answerButton.style.display = 'none';
+    }
+    
+    // Обновляем счетчик ответов
+    const roomAnswersCount = document.getElementById('roomAnswersCount');
+    if (roomAnswersCount && result.answersCount) {
+      roomAnswersCount.textContent = result.answersCount;
+    }
+    
+  } catch (error) {
+    console.error('Ошибка при отправке ответа:', error);
+    showNotification(`Ошибка: ${error.message}`, 'error');
+  }
 }
+
+// При загрузке страницы добавляем обработчик для кнопки отправки ответа
+document.addEventListener('DOMContentLoaded', function() {
+  const submitAnswerBtn = document.getElementById('submitAnswerBtn');
+  if (submitAnswerBtn) {
+    submitAnswerBtn.addEventListener('click', submitAnswer);
+    console.log('Обработчик для кнопки отправки ответа добавлен');
+  }
+});
 
 // Обработчик события кнопки ответа
 document.addEventListener('DOMContentLoaded', () => {
     console.log("Инициализация обработчиков userAnswer.js");
-    
-    const submitAnswerBtn = document.getElementById('submitAnswerBtn');
-    if (submitAnswerBtn) {
-        console.log("Найдена кнопка submitAnswerBtn, добавляем обработчик");
-        submitAnswerBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            console.log("Нажата кнопка отправки ответа");
-            submitAnswer();
-        });
-    } else {
-        console.warn("Кнопка submitAnswerBtn не найдена!");
-    }
     
     // Обработчик нажатия Enter в поле ввода ответа
     const answerInput = document.getElementById('answerInput');

@@ -660,17 +660,17 @@ app.post('/api/auth/register', (req, res) => {
     console.log(`Регистрация пользователя: ${userId}, ${name}, ${method}`);
     
     try {
-      // Создаем или обновляем запись о пользователе в базе данных
-      db.get('users')
-        .push({
-          id: userId,
-          name: name || 'Пользователь',
-          method,
-          metadata: metadata || {},
-          registeredAt: Date.now(),
-          lastLoginAt: Date.now()
-        })
-        .write();
+    // Создаем или обновляем запись о пользователе в базе данных
+    db.get('users')
+      .push({
+        id: userId,
+        name: name || 'Пользователь',
+        method,
+        metadata: metadata || {},
+        registeredAt: Date.now(),
+        lastLoginAt: Date.now()
+      })
+      .write();
       
       console.log(`Пользователь ${userId} успешно зарегистрирован`);
     } catch (dbError) {
@@ -772,22 +772,22 @@ app.post('/api/games/:gameId/answer', (req, res) => {
     
     // Пытаемся также сохранить в db (если доступно)
     try {
-      const answerId = shortid.generate();
-      const newAnswer = {
-        id: answerId,
-        gameId: gameId,
-        userId: userId,
+    const answerId = shortid.generate();
+    const newAnswer = {
+      id: answerId,
+      gameId: gameId,
+      userId: userId,
         text: answer,
-        username: username || 'Анонимный участник',
-        anonymous: anonymous === true,
-        timestamp: Date.now(),
-        votes: 0
-      };
-      
-      db.get('answers')
-        .push(newAnswer)
-        .write();
-      
+      username: username || 'Анонимный участник',
+      anonymous: anonymous === true,
+      timestamp: Date.now(),
+      votes: 0
+    };
+    
+    db.get('answers')
+      .push(newAnswer)
+      .write();
+    
       console.log(`Ответ сохранен в базе данных с ID ${answerId}`);
       
       // Проверяем автоматический запуск голосования при достижении MAX_ANSWERS
@@ -808,9 +808,9 @@ app.post('/api/games/:gameId/answer', (req, res) => {
         
         // Уведомляем участников о начале голосования через socket.io
         try {
-          io.to(gameId).emit('statusChanged', { 
-            gameId: gameId, 
-            status: 'voting',
+      io.to(gameId).emit('statusChanged', { 
+        gameId: gameId, 
+        status: 'voting',
             message: `Собрано ${MAX_ANSWERS} ответов! Начинаем голосование.`
           });
         } catch (ioError) {
@@ -823,7 +823,7 @@ app.post('/api/games/:gameId/answer', (req, res) => {
     }
     
     return res.json({ 
-      status: 'success',
+        status: 'success',
       message: 'Ответ успешно отправлен',
       answersCount: answersCount
     });
@@ -855,9 +855,9 @@ app.get('/api/games/:gameId/check-answer', (req, res) => {
     
     try {
       // Проверяем, есть ли ответ от этого пользователя в db
-      const existingAnswer = db.get('answers')
-        .find({ gameId: gameId, userId: userId })
-        .value();
+    const existingAnswer = db.get('answers')
+      .find({ gameId: gameId, userId: userId })
+      .value();
       
       hasAnswered = !!existingAnswer;
     } catch (dbError) {
@@ -892,7 +892,7 @@ app.post('/api/games/:gameId/startVoting', (req, res) => {
   const gameId = req.params.gameId;
   const { userId } = req.body;
   
-  if (!gameId || !userId) {
+    if (!gameId || !userId) {
     return res.status(400).json({ error: 'Не указан ID игры или пользователя' });
   }
   
@@ -1151,7 +1151,7 @@ app.get('/ping', (req, res) => {
 
 // Обработка запроса к корню
 app.get('/', (req, res) => {
-  const htmlPath = path.join(__dirname, 'public', 'papyrus.html');
+  const htmlPath = path.join(__dirname, 'public', 'register.html');
   
   if (fs.existsSync(htmlPath)) {
     console.log(`Отправка файла: ${htmlPath}`);
@@ -1161,8 +1161,8 @@ app.get('/', (req, res) => {
     
     // Проверяем альтернативные пути
     const altPaths = [
-      path.join(process.cwd(), 'public', 'papyrus.html'),
-      path.join(process.cwd(), 'src', 'public', 'papyrus.html')
+      path.join(process.cwd(), 'public', 'register.html'),
+      path.join(process.cwd(), 'src', 'public', 'register.html')
     ];
     
     for (const altPath of altPaths) {
@@ -1172,7 +1172,14 @@ app.get('/', (req, res) => {
       }
     }
     
-    // Если файл не найден, отправляем сообщение об ошибке
+    // Если файл регистрации не найден, пробуем отправить papyrus.html как запасной вариант
+    const papyrusPath = path.join(__dirname, 'public', 'papyrus.html');
+    if (fs.existsSync(papyrusPath)) {
+      console.log(`Файл register.html не найден, отправка запасного файла: ${papyrusPath}`);
+      return res.sendFile(papyrusPath);
+    }
+    
+    // Если ни один файл не найден, отправляем сообщение об ошибке
     res.status(404).send(`
       <html>
         <head>
@@ -1185,10 +1192,10 @@ app.get('/', (req, res) => {
         </head>
         <body>
           <h1>Ошибка 404 - Файл не найден</h1>
-          <p>Не удалось найти файл papyrus.html.</p>
+          <p>Не удалось найти файлы регистрации и игры.</p>
           <p>Текущая директория: ${__dirname}</p>
           <p>Проверенные пути:</p>
-          <pre>${htmlPath}\n${altPaths.join('\n')}</pre>
+          <pre>${htmlPath}\n${altPaths.join('\n')}\n${papyrusPath}</pre>
         </body>
       </html>
     `);
@@ -1230,8 +1237,8 @@ setInterval(() => {
 
 // Обработка завершения
 if (bot) {
-  process.once('SIGINT', () => bot.stop('SIGINT'));
-  process.once('SIGTERM', () => bot.stop('SIGTERM'));
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
 }
 
 // Запуск сервера
