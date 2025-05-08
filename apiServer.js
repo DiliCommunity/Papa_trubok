@@ -15,6 +15,57 @@ const io = require('./io');
 // Загружаем переменные окружения
 dotenv.config();
 
+// Создаем заглушку для модуля db, если он отсутствует
+let db;
+try {
+  db = require('./db');
+} catch (e) {
+  console.warn('Модуль db.js не найден, используется встроенная заглушка');
+  // Заглушка для модуля db
+  db = {
+    saveUser: (userId, userData) => userData,
+    getUser: (userId) => null,
+    getAllUsers: () => ({}),
+    saveGame: (gameId, gameData) => gameData,
+    getGame: (gameId) => null,
+    getAllGames: () => ({}),
+    deleteGame: () => true,
+    deleteUser: () => true,
+    get: (collection) => ({
+      find: () => ({
+        value: () => null,
+        assign: () => ({ write: () => {} })
+      }),
+      push: () => ({ write: () => {} }),
+      filter: () => ({
+        size: () => ({
+          value: () => 0
+        })
+      })
+    })
+  };
+}
+
+// Создаем заглушку для модуля io, если он отсутствует
+let io;
+try {
+  io = require('./io');
+} catch (e) {
+  console.warn('Модуль io.js не найден, используется встроенная заглушка');
+  // Заглушка для модуля io
+  io = {
+    initConnection: () => ({}),
+    closeConnection: () => true,
+    on: () => {},
+    emit: () => {},
+    sendTo: () => true,
+    broadcast: () => 0,
+    to: () => ({
+      emit: () => {}
+    })
+  };
+}
+
 // Переменная окружения для определения среды
 process.env.NODE_ENV = process.env.NODE_ENV || 'development';
 console.log(`Запуск в режиме: ${process.env.NODE_ENV}`);
@@ -31,8 +82,60 @@ if (!process.env.WEB_APP_URL) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Подключаем бота для отправки уведомлений
-const bot = new Telegraf(process.env.BOT_TOKEN);
+// Подключаем бота для отправки уведомлений, если есть токен
+let bot = null;
+try {
+  if (process.env.BOT_TOKEN) {
+    bot = new Telegraf(process.env.BOT_TOKEN);
+    
+    // Сцены
+    let nameScene, answerScene, customQuestionScene;
+    try {
+      nameScene = require('./scenes/nameScene');
+      answerScene = require('./scenes/answerScene');
+      customQuestionScene = require('./scenes/customQuestionScene');
+
+      // Инициализация сцен
+      const stage = new Scenes.Stage([nameScene, answerScene, customQuestionScene]);
+      bot.use(session());
+      bot.use(stage.middleware());
+      
+      // Команда старт
+      bot.command('start', async (ctx) => {
+        try {
+          await ctx.reply(
+            `🎭 ДОБРО ПОЖАЛОВАТЬ 🎭\n\nЯ бот для игры в смешные вопросы PapaTrubok. Чтобы начать, нажмите кнопку ниже!`,
+            {
+              parse_mode: 'HTML',
+              ...Markup.inlineKeyboard([
+                [Markup.button.callback('🚀 Старт', 'start_game')]
+              ])
+            }
+          );
+        } catch (error) {
+          console.error('Ошибка при обработке команды start:', error);
+          ctx.reply('Произошла ошибка. Пожалуйста, попробуйте снова ввести /start');
+        }
+      });
+      
+      // Запускаем бота
+      bot.launch().then(() => {
+        console.log('Бот успешно запущен!');
+      }).catch(err => {
+        console.error('Ошибка при запуске бота:', err);
+        bot = null; // Сбрасываем бота в случае ошибки
+      });
+    } catch (err) {
+      console.error('Ошибка при инициализации сцен бота:', err);
+      bot = null;
+    }
+  } else {
+    console.warn('BOT_TOKEN не задан, функциональность бота отключена');
+  }
+} catch (e) {
+  console.error('Не удалось инициализировать бота:', e);
+  bot = null;
+}
 
 // Middlewares
 app.use(cors());
@@ -42,16 +145,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Загружаем данные
 gameManager.loadGames();
 userManager.loadUsers();
-
-// Сцены
-const nameScene = require('./scenes/nameScene');
-const answerScene = require('./scenes/answerScene');
-const customQuestionScene = require('./scenes/customQuestionScene');
-
-// Инициализация сцен
-const stage = new Scenes.Stage([nameScene, answerScene, customQuestionScene]);
-bot.use(session());
-bot.use(stage.middleware());
 
 // --- КОНСТАНТЫ И ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 const MAX_ANSWERS = 10;
@@ -77,24 +170,20 @@ function createStyledMessage(title, content, emoji = '📝') {
   return `<b>🔸🔹🔸 ${emoji} ${title} ${emoji} 🔸🔹🔸</b>\n\n${content}`;
 }
 
-// --- ОБРАБОТЧИКИ КОМАНД И CALLBACK'ОВ ---
-
-bot.command('start', async (ctx) => {
-  try {
-    await ctx.reply(
-      createStyledMessage('ДОБРО ПОЖАЛОВАТЬ', 'Я бот для игры в смешные вопросы PapaTrubok. Чтобы начать, нажмите кнопку ниже!', '🎭'),
-      {
-        parse_mode: 'HTML',
-        ...Markup.inlineKeyboard([
-          [Markup.button.callback('🚀 Старт', 'start_game')]
-        ])
-      }
-    );
-  } catch (error) {
-    console.error('Ошибка при обработке команды start:', error);
-    ctx.reply('Произошла ошибка. Пожалуйста, попробуйте снова ввести /start');
+// Функция для отправки сообщения через бота (с проверкой на наличие бота)
+function sendTelegramMessage(userId, text, options = {}) {
+  if (!bot) {
+    console.log(`Сообщение не отправлено (бот не инициализирован): ${text}`);
+    return Promise.resolve();
   }
-});
+  
+  return bot.telegram.sendMessage(userId, text, options)
+    .catch(error => {
+      console.warn(`Не удалось отправить сообщение пользователю ${userId}:`, error.message);
+    });
+}
+
+// --- ОБРАБОТЧИКИ КОМАНД И CALLBACK'ОВ ---
 
 // Обработчик для callback кнопок
 bot.on('callback_query', async (ctx) => {
@@ -163,7 +252,7 @@ bot.on('callback_query', async (ctx) => {
           try {
             // Проверяем ID участника перед отправкой уведомления
             if (participantId && typeof participantId === 'string' && participantId.length > 0) {
-              bot.telegram.sendMessage(
+              sendTelegramMessage(
                 participantId,
                 `🎯 Голосование началось!\n\nСоздатель игры начал голосование по вопросу:\n"${game.currentQuestion}"\n\nОткройте мини-приложение, чтобы проголосовать!`,
                 {
@@ -174,9 +263,7 @@ bot.on('callback_query', async (ctx) => {
                     ]
                   }
                 }
-              ).catch(error => {
-                console.warn(`Не удалось отправить уведомление участнику ${participantId}:`, error.message);
-              });
+              );
             }
           } catch (e) {
             console.error(`Не удалось отправить уведомление участнику ${participantId}:`, e);
@@ -291,7 +378,7 @@ function checkReminders() {
       const webAppUrl = process.env.WEB_APP_URL || 'https://t.me/PapaTrubokBot/app';
       
       // Отправляем уведомление о возможности начать голосование
-      await bot.telegram.sendMessage(
+      sendTelegramMessage(
         reminder.userId,
         createStyledMessage('НАПОМИНАНИЕ О ГОЛОСОВАНИИ', 
           `Прошло 12 часов с момента создания вашей игры!\n\n` +
@@ -431,7 +518,7 @@ app.post('/api/games/:gameId/join', (req, res) => {
           // Если набралось 3 или более игроков, предлагаем начать игру
           const participantCount = game.participants.length;
           
-          bot.telegram.sendMessage(
+          sendTelegramMessage(
             game.initiator,
             `🎮 Новый игрок присоединился!\n\n${playerName} вошел в игру.\nВсего игроков: ${participantCount}/10`,
             {
@@ -442,10 +529,7 @@ app.post('/api/games/:gameId/join', (req, res) => {
                 ]
               }
             }
-          ).catch(error => {
-            // Логируем ошибку, но не прерываем выполнение
-            console.warn(`Не удалось отправить уведомление создателю игры (ID: ${game.initiator}):`, error.message);
-          });
+          );
           
           // Если это третий игрок, создаем напоминание о голосовании через 12 часов для создателя
           if (participantCount === 3) {
@@ -690,7 +774,7 @@ app.post('/api/games/:gameId/startVoting', (req, res) => {
       game.participants.forEach(participantId => {
         if (participantId && typeof participantId === 'string' && participantId.length > 0) {
           try {
-            bot.telegram.sendMessage(
+            sendTelegramMessage(
               participantId,
               `🎯 Голосование началось!\n\nСоздатель игры начал голосование по вопросу:\n"${game.currentQuestion}"\n\nОткройте мини-приложение, чтобы проголосовать!`,
               {
@@ -701,9 +785,7 @@ app.post('/api/games/:gameId/startVoting', (req, res) => {
                   ]
                 }
               }
-            ).catch(error => {
-              console.warn(`Не удалось отправить уведомление участнику ${participantId}:`, error.message);
-            });
+            );
           } catch (e) {
             console.error(`Не удалось отправить уведомление участнику ${participantId}:`, e);
           }
@@ -872,7 +954,7 @@ function notifyAboutResults(gameId) {
       try {
         // Проверяем ID участника перед отправкой уведомления
         if (participantId && typeof participantId === 'string' && participantId.length > 0) {
-          bot.telegram.sendMessage(
+          sendTelegramMessage(
             participantId,
             resultText,
             {
@@ -883,9 +965,7 @@ function notifyAboutResults(gameId) {
                 ]
               }
             }
-          ).catch(error => {
-            console.warn(`Не удалось отправить результаты участнику ${participantId}:`, error.message);
-          });
+          );
         }
       } catch (e) {
         console.error(`Не удалось отправить результаты участнику ${participantId}:`, e);
@@ -939,24 +1019,11 @@ setInterval(() => {
   }
 }, 1000 * 60 * 60); // Каждый час
 
-// --- ЗАПУСК БОТА ---
-(async () => {
-  try {
-    await bot.telegram.setMyCommands([
-      { command: 'start', description: 'Запустить бота' },
-      { command: 'newgame', description: 'Начать новую игру' },
-      { command: 'help', description: 'Показать правила игры' }
-    ]);
-    await bot.launch();
-    console.log('Бот успешно запущен!');
-  } catch (err) {
-    console.error('Ошибка при запуске бота:', err);
-  }
-})();
-
 // Обработка завершения
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+if (bot) {
+  process.once('SIGINT', () => bot.stop('SIGINT'));
+  process.once('SIGTERM', () => bot.stop('SIGTERM'));
+}
 
 // Запуск сервера
 app.listen(PORT, () => {
