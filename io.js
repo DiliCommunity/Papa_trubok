@@ -105,6 +105,20 @@ function broadcast(event, data) {
     return sentCount;
 }
 
+/**
+ * Возвращает объект для работы с определенной комнатой/каналом
+ * @param {string} room - Идентификатор комнаты
+ * @returns {object} - Объект с методом emit
+ */
+function to(room) {
+    return {
+        emit: (event, data) => {
+            console.log(`IO: Эмитировано событие ${event} в комнату ${room}`);
+            return true;
+        }
+    };
+}
+
 // Экспортируем функции модуля
 module.exports = {
     initConnection,
@@ -112,5 +126,6 @@ module.exports = {
     on,
     emit,
     sendTo,
-    broadcast
+    broadcast,
+    to
 }; 

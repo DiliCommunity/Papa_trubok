@@ -3,7 +3,12 @@
 // Хранилище данных в памяти
 const storage = {
     users: {},
-    games: {}
+    games: {},
+    _collections: {
+      users: [],
+      games: [],
+      answers: []
+    }
 };
 
 /**
@@ -86,6 +91,80 @@ function deleteUser(userId) {
     return false;
 }
 
+/**
+ * Метод get для получения доступа к коллекции в стиле lowdb
+ * @param {string} collectionName - Имя коллекции 
+ * @returns {object} - Объект для работы с коллекцией
+ */
+function get(collectionName) {
+  if (!storage._collections[collectionName]) {
+    storage._collections[collectionName] = [];
+  }
+  
+  return {
+    // Поиск объекта в коллекции
+    find: (query = {}) => {
+      const keys = Object.keys(query);
+      return {
+        value: () => {
+          if (keys.length === 0) return null;
+          return storage._collections[collectionName].find(item => 
+            keys.every(key => item[key] === query[key])
+          ) || null;
+        },
+        // Обновление объекта
+        assign: (newData) => {
+          return {
+            write: () => {
+              if (keys.length === 0) return;
+              const index = storage._collections[collectionName].findIndex(item => 
+                keys.every(key => item[key] === query[key])
+              );
+              if (index !== -1) {
+                storage._collections[collectionName][index] = {
+                  ...storage._collections[collectionName][index],
+                  ...newData
+                };
+              }
+            }
+          };
+        }
+      };
+    },
+    // Добавление объекта в коллекцию
+    push: (item) => {
+      return {
+        write: () => {
+          storage._collections[collectionName].push(item);
+          return item;
+        }
+      };
+    },
+    // Фильтрация коллекции
+    filter: (query = {}) => {
+      const keys = Object.keys(query);
+      return {
+        size: () => {
+          return {
+            value: () => {
+              if (keys.length === 0) return storage._collections[collectionName].length;
+              return storage._collections[collectionName].filter(item => 
+                keys.every(key => item[key] === query[key])
+              ).length;
+            }
+          };
+        },
+        value: () => {
+          if (keys.length === 0) return storage._collections[collectionName];
+          return storage._collections[collectionName].filter(item => 
+            keys.every(key => item[key] === query[key])
+          );
+        }
+      };
+    }
+  };
+}
+
 // Экспортируем функции модуля
 module.exports = {
     saveUser,
@@ -95,5 +174,6 @@ module.exports = {
     getGame,
     getAllGames,
     deleteGame,
-    deleteUser
+    deleteUser,
+    get
 }; 
