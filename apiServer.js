@@ -8,6 +8,9 @@ const dotenv = require('dotenv');
 const { Telegraf, Scenes, session } = require('telegraf');
 const { Markup } = require('telegraf');
 const fs = require('fs');
+const shortid = require('shortid');
+const db = require('./db');
+const io = require('./io');
 
 // Загружаем переменные окружения
 dotenv.config();
@@ -467,129 +470,210 @@ app.post('/api/games/:gameId/join', (req, res) => {
   });
 });
 
-// Обработчик для сохранения ответа
+// Обработчик для регистрации пользователя
+app.post('/api/auth/register', (req, res) => {
+  try {
+    const { userId, name, method, metadata } = req.body;
+    
+    if (!userId || !method) {
+      return res.status(400).json({ 
+        status: 'error', 
+        error: 'userId и method обязательны для регистрации' 
+      });
+    }
+    
+    // Создаем или обновляем запись о пользователе в базе данных
+    db.get('users')
+      .push({
+        id: userId,
+        name: name || 'Пользователь',
+        method,
+        metadata: metadata || {},
+        registeredAt: Date.now(),
+        lastLoginAt: Date.now()
+      })
+      .write();
+    
+    return res.json({ 
+      status: 'success', 
+      message: 'Пользователь успешно зарегистрирован'
+    });
+  } catch (error) {
+    console.error('Ошибка при регистрации пользователя:', error);
+    return res.status(500).json({ 
+      status: 'error', 
+      error: 'Внутренняя ошибка сервера'
+    });
+  }
+});
+
+// Обновляем обработчик отправки ответа, чтобы отслеживать, кто уже ответил
 app.post('/api/games/:gameId/answer', (req, res) => {
+  try {
     const gameId = req.params.gameId;
     const { userId, answer, username, anonymous } = req.body;
     
+    // Проверяем наличие обязательных полей
     if (!userId || !answer) {
-        return res.status(400).json({ error: 'Не хватает данных' });
+      return res.status(400).json({ 
+        status: 'error', 
+        error: 'Не указан ID пользователя или ответ' 
+      });
     }
     
-    const games = gameManager.getGames();
-    const game = games[gameId];
+    // Получаем игру из базы данных
+    const game = db.get('games').find({ id: gameId }).value();
     
     if (!game) {
-        return res.status(404).json({ error: 'Игра не найдена' });
+      return res.status(404).json({ 
+        status: 'error', 
+        error: 'Игра не найдена' 
+      });
     }
     
+    // Проверяем, что игра находится в фазе сбора ответов
     if (game.status !== 'collecting_answers') {
-        return res.status(400).json({ error: 'Игра не принимает ответы' });
+      return res.status(400).json({ 
+        status: 'error', 
+        error: 'Игра не находится в фазе сбора ответов' 
+      });
+    }
+    
+    // Проверяем, не отвечал ли уже пользователь
+    const existingAnswer = db.get('answers')
+      .find({ gameId: gameId, userId: userId })
+      .value();
+    
+    if (existingAnswer) {
+      return res.status(400).json({ 
+        status: 'error', 
+        error: 'Вы уже ответили на этот вопрос' 
+      });
     }
     
     // Сохраняем ответ
-    if (!game.answers) game.answers = {};
-    game.answers[userId] = {
-        text: answer,
-        username: username,
-        anonymous: !!anonymous,
-        timestamp: Date.now()
+    const answerId = shortid.generate();
+    const newAnswer = {
+      id: answerId,
+      gameId: gameId,
+      userId: userId,
+      text: answer,
+      username: username || 'Анонимный участник',
+      anonymous: anonymous === true,
+      timestamp: Date.now(),
+      votes: 0
     };
     
-    gameManager.setGame(gameId, game);
+    db.get('answers')
+      .push(newAnswer)
+      .write();
     
-    const isCreator = game.initiator === userId;
+    // Обновляем количество ответов в игре
+    const answersCount = db.get('answers')
+      .filter({ gameId: gameId })
+      .size()
+      .value();
     
-    res.json({ 
-        status: 'success',
-        answersCount: Object.keys(game.answers).length,
-        isCreator: isCreator
+    // Если достигнуто 10 ответов, автоматически запускаем голосование
+    if (answersCount >= 10 && game.status === 'collecting_answers') {
+      db.get('games')
+        .find({ id: gameId })
+        .assign({ status: 'voting', updatedAt: Date.now() })
+        .write();
+      
+      // Уведомляем всех участников о начале голосования
+      io.to(gameId).emit('statusChanged', { 
+        gameId: gameId, 
+        status: 'voting',
+        message: 'Собрано 10 ответов! Начинаем голосование.'
+      });
+    }
+    
+    return res.json({ 
+      status: 'success', 
+      message: 'Ответ успешно отправлен',
+      answerId: answerId,
+      answersCount: answersCount
     });
+  } catch (error) {
+    console.error('Ошибка при отправке ответа:', error);
+    return res.status(500).json({ 
+      status: 'error', 
+      error: 'Внутренняя ошибка сервера' 
+    });
+  }
 });
 
-// Обработчик для начала голосования
-app.post('/api/games/:gameId/startVoting', (req, res) => {
+// Новый метод для проверки, ответил ли пользователь на вопрос
+app.get('/api/games/:gameId/check-answer', (req, res) => {
+  try {
     const gameId = req.params.gameId;
-    const { userId } = req.body;
+    const userId = req.query.userId;
     
-    if (!userId) {
-        return res.status(400).json({ error: 'Не хватает данных' });
+    if (!gameId || !userId) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'Не указан ID игры или пользователя'
+      });
     }
     
-    const games = gameManager.getGames();
-    const game = games[gameId];
+    // Проверяем, есть ли ответ от этого пользователя
+    const existingAnswer = db.get('answers')
+      .find({ gameId: gameId, userId: userId })
+      .value();
     
-    if (!game) {
-        return res.status(404).json({ error: 'Игра не найдена' });
-    }
-    
-    if (game.initiator != userId) {
-        return res.status(403).json({ error: 'Только создатель может начать голосование' });
-    }
-    
-    const answersCount = Object.keys(game.answers || {}).length;
-    if (answersCount < 3) {
-        return res.status(400).json({ error: 'Нужно минимум 3 ответа для голосования' });
-    }
-    
-    game.status = 'voting';
-    game.votes = {};
-    gameManager.setGame(gameId, game);
-    
-    // Отправляем уведомления участникам
-    if (Array.isArray(game.participants)) {
-        game.participants.forEach(participantId => {
-            if (participantId && typeof participantId === 'string') {
-                bot.telegram.sendMessage(
-                    participantId,
-                    `🎯 Голосование началось!\n\nСоздатель игры начал голосование.\nВопрос: "${game.currentQuestion}"\n\nОткройте приложение, чтобы проголосовать!`
-                ).catch(error => {
-                    console.warn(`Не удалось отправить уведомление участнику ${participantId}:`, error.message);
-                });
-            }
-        });
-    }
-    
-    res.json({ status: 'success' });
+    return res.json({
+      status: 'success',
+      hasAnswered: !!existingAnswer
+    });
+  } catch (error) {
+    console.error('Ошибка при проверке ответа пользователя:', error);
+    return res.status(500).json({
+      status: 'error',
+      error: 'Внутренняя ошибка сервера'
+    });
+  }
 });
 
-// Получить ответы для голосования
-app.get('/api/games/:gameId/answers', (req, res) => {
-  const gameId = req.params.gameId;
-  const userId = req.query.userId;
-  
-  if (!userId) {
-    return res.status(400).json({ error: 'Не хватает данных' });
-  }
-  
-  const games = gameManager.getGames();
-  const game = games[gameId];
-  
-  if (!game) {
-    return res.status(404).json({ error: 'Игра не найдена' });
-  }
-  
-  if (game.status !== 'voting') {
-    return res.status(400).json({ error: 'Игра не в режиме голосования' });
-  }
-  
-  // Получаем все ответы, кроме ответа пользователя
-  const answers = Object.entries(game.answers || {})
-    .filter(([uid]) => uid !== userId.toString())
-    .map(([uid, ans]) => ({
-      id: uid,
-      text: ans.text,
-      username: ans.anonymous ? 'Анонимный пользователь' : ans.username,
-      anonymous: !!ans.anonymous // Передаем флаг анонимности
-    }));
+// Новый метод для получения ответа пользователя
+app.get('/api/games/:gameId/user-answer', (req, res) => {
+  try {
+    const gameId = req.params.gameId;
+    const userId = req.query.userId;
     
-  const isCreator = game.initiator === userId;
-  
-  res.json({ 
-    answers, 
-    question: game.currentQuestion,
-    isCreator
-  });
+    if (!gameId || !userId) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'Не указан ID игры или пользователя'
+      });
+    }
+    
+    // Находим ответ пользователя
+    const userAnswer = db.get('answers')
+      .find({ gameId: gameId, userId: userId })
+      .value();
+    
+    if (!userAnswer) {
+      return res.json({
+        status: 'success',
+        hasAnswer: false,
+        answer: null
+      });
+    }
+    
+    return res.json({
+      status: 'success',
+      hasAnswer: true,
+      answer: userAnswer.text,
+      answerId: userAnswer.id
+    });
+  } catch (error) {
+    console.error('Ошибка при получении ответа пользователя:', error);
+    return res.status(500).json({
+      status: 'error',
+      error: 'Внутренняя ошибка сервера'
+    });
+  }
 });
 
 // Отправить голоса
@@ -876,48 +960,6 @@ app.get('/api/debug/users', (req, res) => {
   });
 });
 
-// Проверка, ответил ли пользователь на вопрос
-app.get('/api/games/:gameId/check-answer', (req, res) => {
-  const gameId = req.params.gameId;
-  const userId = req.query.userId;
-  
-  if (!userId) {
-    return res.status(400).json({ error: 'Не указан ID пользователя' });
-  }
-  
-  const games = gameManager.getGames();
-  const game = games[gameId];
-  
-  if (!game) {
-    return res.status(404).json({ error: 'Игра не найдена' });
-  }
-  
-  const hasAnswered = game.answers && game.answers[userId];
-  
-  res.json({ hasAnswered: !!hasAnswered });
-});
-
-// Получение ответа конкретного пользователя
-app.get('/api/games/:gameId/user-answer', (req, res) => {
-  const gameId = req.params.gameId;
-  const userId = req.query.userId;
-  
-  if (!userId) {
-    return res.status(400).json({ error: 'Не указан ID пользователя' });
-  }
-  
-  const games = gameManager.getGames();
-  const game = games[gameId];
-  
-  if (!game) {
-    return res.status(404).json({ error: 'Игра не найдена' });
-  }
-  
-  const userAnswer = game.answers && game.answers[userId] ? game.answers[userId].text : '';
-  
-  res.json({ answer: userAnswer });
-});
-
 // Проверка, голосовал ли пользователь в игре
 app.get('/api/games/:gameId/check-vote', (req, res) => {
   const gameId = req.params.gameId;
@@ -937,4 +979,35 @@ app.get('/api/games/:gameId/check-vote', (req, res) => {
   const hasVoted = game.votes && game.votes[userId];
   
   res.json({ hasVoted: !!hasVoted });
+});
+
+// Новый метод для получения количества ответов в игре
+app.get('/api/games/:gameId/answers-count', (req, res) => {
+  try {
+    const gameId = req.params.gameId;
+    
+    if (!gameId) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'Не указан ID игры'
+      });
+    }
+    
+    // Получаем количество ответов для данной игры
+    const answersCount = db.get('answers')
+      .filter({ gameId: gameId })
+      .size()
+      .value();
+    
+    return res.json({
+      status: 'success',
+      count: answersCount
+    });
+  } catch (error) {
+    console.error('Ошибка при получении количества ответов:', error);
+    return res.status(500).json({
+      status: 'error',
+      error: 'Внутренняя ошибка сервера'
+    });
+  }
 }); 

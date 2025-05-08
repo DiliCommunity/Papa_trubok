@@ -627,7 +627,7 @@ textarea.form-input {
     font-size: 2.2rem;
     font-weight: bold;
     letter-spacing: 2px;
-    text-shadow: 0 2px 8px #fff7, 0 1px 0 #fff, 0 0 2px var(--accent-gold);
+    text-shadow: 0 2px 8px rgba(19, 8, 8, 0.467), 0 1px 0 #ffffff, 0 0 2px var(--accent-gold);
     margin-bottom: 0.5em;
     background: linear-gradient(90deg, var(--accent-gold), var(--accent-red), var(--accent-blue), var(--accent-gold));
     background-size: 200% 200%;
@@ -1015,4 +1015,148 @@ textarea.form-input {
 .viewer-btn:active {
     transform: translateY(1px);
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+/* Стили для экрана авторизации */
+.auth-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: var(--papyrus-light);
+    padding: 1.5rem;
+    border-radius: 10px;
+    border: 2px solid var(--papyrus-border);
+    margin: 1rem 0;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.auth-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    width: 100%;
+    max-width: 350px;
+    margin: 1.5rem 0;
+}
+
+.auth-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    gap: 10px;
+    min-height: 54px;
+}
+
+.auth-icon {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+    margin-right: 10px;
+}
+
+.telegram-button {
+    background: linear-gradient(135deg, #37aee2, #1e96c8);
+    color: #fff;
+    border: none;
+}
+
+.telegram-button:hover {
+    background: linear-gradient(135deg, #2b9ed8, #0d85b7);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(30, 150, 200, 0.3);
+}
+
+.google-button {
+    background: #fff;
+    color: #444;
+    border: 1px solid #ddd;
+}
+
+.google-button:hover {
+    background: #f8f8f8;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.auth-info {
+    font-size: 0.9rem;
+    color: #666;
+    text-align: center;
+    margin: 1rem 0;
+}
+
+.skip-auth-btn {
+    background: transparent;
+    color: var(--accent-color);
+    border: 1px dashed var(--accent-color);
+    font-size: 0.9rem;
+    padding: 8px 15px;
+}
+
+.skip-auth-btn:hover {
+    background: rgba(164, 104, 67, 0.1);
+    border: 1px solid var(--accent-color);
+}
+
+/* Адаптив для экрана авторизации */
+@media (max-width: 480px) {
+    .auth-container {
+        padding: 1rem;
+    }
+    
+    .auth-buttons {
+        max-width: 100%;
+    }
+    
+    .auth-button {
+        padding: 10px 15px;
+        font-size: 0.9rem;
+    }
+}
+
+/* Google Sign-In кнопка */
+.g_id_signin {
+    margin: 10px auto;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+/* Стили для экрана комнаты игры */
+.room-status {
+    display: flex;
+    justify-content: space-around;
+    margin-top: 1rem;
+    padding: 0.5rem;
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 5px;
+    font-weight: bold;
+}
+
+.room-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 1.5rem;
+}
+
+.user-answer-box {
+    background: rgba(255, 248, 234, 0.6);
+    border: 1px solid var(--accent-color);
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1rem 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.user-answer-text {
+    font-size: 1.1rem;
+    font-style: italic;
+    color: var(--accent-color);
+    margin: 0.5rem 0;
 }
