@@ -40,19 +40,14 @@ function checkAuth() {
   }
 }
 
-// Проверяем авторизацию при загрузке страницы
-document.addEventListener('DOMContentLoaded', function() {
-  checkAuth();
-});
-
 // Правильное определение объекта Telegram WebApp
 // Если мы внутри Telegram WebApp, используем его объект, иначе создаем заглушку
 if (!window.Telegram || !window.Telegram.WebApp) {
   console.log("Telegram WebApp не обнаружен, создаем заглушку для локального тестирования");
   window.Telegram = {
     WebApp: {
-  initDataUnsafe: {
-    user: {
+      initDataUnsafe: {
+        user: {
           id: Math.floor(Math.random() * 1000000),
           first_name: '',
           username: '',
@@ -169,7 +164,7 @@ function showScreen(screenId) {
   let currentScreenId = null;
   const screens = [
     'startScreen', 'nameScreen', 'gameScreen', 'questionScreen',
-    'answerScreen', 'votingScreen', 'resultsScreen'
+    'answerScreen', 'votingScreen', 'resultsScreen', 'roomScreen'
   ];
   
   for (const id of screens) {
@@ -214,13 +209,13 @@ function showScreen(screenId) {
     
     // Фокус на поля ввода
     if (screenId === 'nameScreen') {
-const nameInput = document.getElementById('nameInput');
+      const nameInput = document.getElementById('nameInput');
       if (nameInput) nameInput.focus();
     } else if (screenId === 'questionScreen') {
-const questionInput = document.getElementById('questionInput');
+      const questionInput = document.getElementById('questionInput');
       if (questionInput) questionInput.focus();
     } else if (screenId === 'answerScreen') {
-const answerInput = document.getElementById('answerInput');
+      const answerInput = document.getElementById('answerInput');
       if (answerInput) answerInput.focus();
     }
   } else {
@@ -244,7 +239,7 @@ function goBack() {
     // Показываем предыдущий экран без добавления в историю
     const screens = [
       'startScreen', 'nameScreen', 'gameScreen', 'questionScreen',
-      'answerScreen', 'votingScreen', 'resultsScreen'
+      'answerScreen', 'votingScreen', 'resultsScreen', 'roomScreen'
     ];
     
     screens.forEach(id => {
@@ -279,10 +274,10 @@ window.startApp = function() {
   }
   
   // Переходим к экрану ввода имени
-    showScreen('nameScreen');
+  showScreen('nameScreen');
   
   // Показываем опции выбора имени
-    showNameChoiceOptions();
+  showNameChoiceOptions();
 };
 
 // Обработчики для отслеживания состояния клавиатуры
@@ -318,13 +313,24 @@ window.addEventListener('popstate', function(e) {
   }
 });
 
-// Предотвращаем стандартное поведение событий "back" Telegram WebApp
+// Инициализация приложения при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
+  console.log('DOMContentLoaded: Инициализация приложения');
+  
+  // Проверяем авторизацию
+  if (!checkAuth()) {
+    return; // Если нет авторизации, остальной код не выполняется
+  }
+
   // Добавляем history state, чтобы сработал popstate
   history.pushState({page: 1}, "Папа Трубок", null);
   
   // Для Telegram WebApp устанавливаем дополнительный обработчик
   if (window.Telegram && window.Telegram.WebApp) {
+    // Инициализация Telegram WebApp
+    window.Telegram.WebApp.ready();
+    window.Telegram.WebApp.expand();
+    
     // Если доступен, включаем подтверждение закрытия
     if (typeof window.Telegram.WebApp.enableClosingConfirmation === 'function') {
       window.Telegram.WebApp.enableClosingConfirmation();
@@ -338,58 +344,264 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
   
-  // Добавляем кнопки для анонимной регистрации
-  setupAnonymousRegistration();
+  // Инициализация обработчиков кнопок
+  initButtonHandlers();
 });
 
-// Отключаем функцию setupAnonymousRegistration, заменяя её на заглушку
-function setupAnonymousRegistration() {
-  // Анонимность отключена
-  console.log('Анонимное голосование отключено');
-}
-
-// Функция для отображения опции использования имени из Telegram
-function showTelegramNameOption() {
-  const telegramName = getTelegramUserName();
+// Инициализация обработчиков кнопок
+function initButtonHandlers() {
+  // Кнопка начала приложения
+  const startAppBtn = document.getElementById('startAppBtn');
+  if (startAppBtn) {
+    startAppBtn.addEventListener('click', function() {
+      window.startApp();
+    });
+  }
   
-  // Скрываем все секции ввода имени
-  const sections = ['newNameSection', 'existingNameSection'];
-  sections.forEach(id => {
-    const section = document.getElementById(id);
-    if (section) section.style.display = 'none';
-  });
+  // Кнопка возврата на начальный экран
+  const backToStartBtn = document.getElementById('backToStartBtn');
+  if (backToStartBtn) {
+    backToStartBtn.addEventListener('click', function() {
+      showScreen('startScreen');
+    });
+  }
   
-  // Показываем главные кнопки выбора
-  const choiceButtons = document.getElementById('nameChoiceButtons');
-  if (choiceButtons) {
-    // Создаем HTML для кнопок
-    choiceButtons.innerHTML = `
-      <button id="useTelegramNameBtn" class="papyrus-button shimmer">Использовать имя из Telegram: ${telegramName}</button>
-      <button id="newNameBtn" class="papyrus-button shimmer">Придумать другое имя</button>
-      <button id="existingNameBtn" class="papyrus-button shimmer ${getSavedNames().length ? '' : 'disabled'}" ${getSavedNames().length ? '' : 'disabled'}>Использовать сохранённое имя</button>
-    `;
-    choiceButtons.style.display = 'block';
-    
-    // Добавляем обработчики для кнопок
-    document.getElementById('useTelegramNameBtn').addEventListener('click', function() {
-      currentUser.name = telegramName;
-      currentUser.anonymous = false; // Имя из Telegram не анонимное
-      showScreen('gameScreen');
-      showNotification(`Используем имя: ${telegramName}`, 'success');
+  // Кнопка возврата на форму выбора имени
+  const backToNameChoiceBtn = document.getElementById('backToNameChoiceBtn');
+  if (backToNameChoiceBtn) {
+    backToNameChoiceBtn.addEventListener('click', function() {
+      showNameChoiceOptions();
+    });
+  }
+  
+  // Кнопка возврата из списка существующих имен
+  const backToNameChoiceFromExistingBtn = document.getElementById('backToNameChoiceFromExistingBtn');
+  if (backToNameChoiceFromExistingBtn) {
+    backToNameChoiceFromExistingBtn.addEventListener('click', function() {
+      showNameChoiceOptions();
+    });
+  }
+  
+  // Кнопка сохранения имени
+  const submitNameBtn = document.getElementById('submitNameBtn');
+  if (submitNameBtn) {
+    submitNameBtn.addEventListener('click', function() {
+      saveName();
+    });
+  }
+  
+  // Обработчик нажатия Enter в поле ввода имени
+  const nameInput = document.getElementById('nameInput');
+  if (nameInput) {
+    nameInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveName();
+      }
+    });
+  }
+  
+  // Кнопка создания игры
+  const createGameBtn = document.getElementById('createGameBtn');
+  if (createGameBtn) {
+    createGameBtn.addEventListener('click', function() {
+      showScreen('questionScreen');
+    });
+  }
+  
+  // Кнопка обновления списка игр
+  const refreshGamesBtn = document.getElementById('refreshGamesBtn');
+  if (refreshGamesBtn) {
+    refreshGamesBtn.addEventListener('click', function() {
       loadGames();
     });
-    
-    document.getElementById('newNameBtn').addEventListener('click', showNewNameForm);
-    
-    const existingNameBtn = document.getElementById('existingNameBtn');
-    existingNameBtn.addEventListener('click', showExistingNames);
-    
-    // Отключаем кнопку, если нет сохраненных имен
-    if (getSavedNames().length === 0) {
-      existingNameBtn.classList.add('disabled');
-      existingNameBtn.style.opacity = '0.5';
-      existingNameBtn.title = 'Нет сохраненных имен';
-    }
+  }
+  
+  // Кнопка возврата к главному меню из экрана создания вопроса
+  const backToMainFromQuestionBtn = document.getElementById('backToMainFromQuestionBtn');
+  if (backToMainFromQuestionBtn) {
+    backToMainFromQuestionBtn.addEventListener('click', function() {
+      showScreen('gameScreen');
+    });
+  }
+  
+  // Кнопка создания игры с введенным вопросом
+  const submitQuestionBtn = document.getElementById('submitQuestionBtn');
+  if (submitQuestionBtn) {
+    submitQuestionBtn.addEventListener('click', async function() {
+      const questionInput = document.getElementById('questionInput');
+      if (!questionInput || !questionInput.value.trim()) {
+        showNotification('Пожалуйста, введите вопрос!', 'warning');
+        return;
+      }
+      
+      try {
+        // Создаем игру на сервере
+        const question = questionInput.value.trim();
+        const creatorName = currentUser.name || 'Анонимный';
+        
+        // Отправляем запрос на создание игры
+        submitQuestionBtn.disabled = true;
+        submitQuestionBtn.textContent = 'Создание...';
+        
+        const response = await fetch(`${API_URL}/games/create`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            question: question,
+            creatorId: currentUser.id,
+            creatorName: creatorName
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Ошибка при создании игры: ${response.status}`);
+        }
+        
+        const game = await response.json();
+        console.log('Игра успешно создана:', game);
+        
+        // Переходим в созданную игру
+        currentGame = game;
+        joinGameRoom(game.id);
+        showNotification('Игра успешно создана!', 'success');
+      } catch (error) {
+        console.error('Ошибка при создании игры:', error);
+        showNotification('Не удалось создать игру. Попробуйте позже.', 'error');
+      } finally {
+        submitQuestionBtn.disabled = false;
+        submitQuestionBtn.textContent = 'Создать игру';
+      }
+    });
+  }
+  
+  // Кнопка возврата к главному меню из экрана ответа
+  const backToMainFromAnswerBtn = document.getElementById('backToMainFromAnswerBtn');
+  if (backToMainFromAnswerBtn) {
+    backToMainFromAnswerBtn.addEventListener('click', function() {
+      showScreen('roomScreen');
+    });
+  }
+  
+  // Кнопка отправки ответа
+  const submitAnswerBtn = document.getElementById('submitAnswerBtn');
+  if (submitAnswerBtn) {
+    submitAnswerBtn.addEventListener('click', async function() {
+      const answerInput = document.getElementById('answerInput');
+      if (!answerInput || !answerInput.value.trim()) {
+        showNotification('Пожалуйста, введите ответ!', 'warning');
+        return;
+      }
+      
+      try {
+        // Отправляем ответ на сервер
+        const answer = answerInput.value.trim();
+        
+        submitAnswerBtn.disabled = true;
+        submitAnswerBtn.textContent = 'Отправка...';
+        
+        const response = await fetch(`${API_URL}/games/${currentGame.id}/answer`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            userId: currentUser.id,
+            userName: currentUser.name,
+            answer: answer
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Ошибка при отправке ответа: ${response.status}`);
+        }
+        
+        showNotification('Ваш ответ принят!', 'success');
+        showScreen('roomScreen');
+        
+        // Обновляем информацию о комнате
+        checkGameStatus();
+      } catch (error) {
+        console.error('Ошибка при отправке ответа:', error);
+        showNotification('Не удалось отправить ответ. Попробуйте позже.', 'error');
+      } finally {
+        submitAnswerBtn.disabled = false;
+        submitAnswerBtn.textContent = 'Отправить ответ';
+      }
+    });
+  }
+  
+  // Кнопка отправки голосов
+  const submitVotesBtn = document.getElementById('submitVotesBtn');
+  if (submitVotesBtn) {
+    submitVotesBtn.addEventListener('click', function() {
+      submitVotes();
+    });
+  }
+  
+  // Кнопка "Назад" на экране результатов
+  const backToMainBtn = document.getElementById('backToMainBtn');
+  if (backToMainBtn) {
+    backToMainBtn.addEventListener('click', function() {
+      showScreen('gameScreen');
+      loadGames();
+    });
+  }
+  
+  // Обработчики для комнаты игры
+  const answerButton = document.getElementById('answerButton');
+  if (answerButton) {
+    answerButton.addEventListener('click', function() {
+      if (currentGame && currentGame.currentQuestion) {
+        showAnswerScreen(currentGame.currentQuestion);
+      } else {
+        showNotification('Ошибка: вопрос не найден', 'error');
+      }
+    });
+  }
+  
+  // Кнопка начала голосования
+  const startVotingButton = document.getElementById('startVotingButton');
+  if (startVotingButton) {
+    startVotingButton.addEventListener('click', function() {
+      if (currentGame && currentGame.id) {
+        startVoting(currentGame.id);
+      } else {
+        showNotification('Ошибка: игра не найдена', 'error');
+      }
+    });
+  }
+  
+  // Кнопка просмотра ответов
+  const viewAnswersButton = document.getElementById('viewAnswersButton');
+  if (viewAnswersButton) {
+    viewAnswersButton.addEventListener('click', function() {
+      if (currentGame && currentGame.id) {
+        loadVotingOptions(currentGame.id);
+      } else {
+        showNotification('Ошибка: игра не найдена', 'error');
+      }
+    });
+  }
+  
+  // Кнопка выхода из комнаты
+  const leaveRoomButton = document.getElementById('leaveRoomButton');
+  if (leaveRoomButton) {
+    leaveRoomButton.addEventListener('click', function() {
+      currentGame = null;
+      showScreen('gameScreen');
+      loadGames();
+    });
+  }
+  
+  // Кнопка "Назад" на экране голосования
+  const backToMainFromVotingBtn = document.getElementById('backToMainFromVotingBtn');
+  if (backToMainFromVotingBtn) {
+    backToMainFromVotingBtn.addEventListener('click', function() {
+      showScreen('roomScreen');
+    });
   }
 }
 
@@ -402,222 +614,251 @@ function showNameChoiceOptions() {
     if (section) section.style.display = 'none';
   });
   
-  // Проверяем, есть ли имя из Telegram
-  const telegramName = getTelegramUserName();
-  
   // Показываем главные кнопки выбора
   const choiceButtons = document.getElementById('nameChoiceButtons');
   if (choiceButtons) {
-    // Создаем HTML для кнопок, включая опцию имени из Telegram, если доступно
-    let buttonHtml = '';
-    
-    if (telegramName) {
-      buttonHtml += `<button id="useTelegramNameBtn" class="papyrus-button shimmer">Использовать имя из Telegram: ${telegramName}</button>`;
+    // Получаем имя из данных авторизации
+    let authName = '';
+    try {
+      const authData = localStorage.getItem('papaTrubokAuth');
+      if (authData) {
+        const parsedAuthData = JSON.parse(authData);
+        if (parsedAuthData && parsedAuthData.name) {
+          authName = parsedAuthData.name;
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка при получении имени из данных авторизации:', error);
     }
     
-    buttonHtml += `
-      <button id="newNameBtn" class="papyrus-button shimmer">Новое имя</button>
-      <button id="existingNameBtn" class="papyrus-button shimmer">Использовать сохранённое имя</button>
-    `;
+    // Создаем HTML для кнопок
+    choiceButtons.innerHTML = '';
     
-    choiceButtons.innerHTML = buttonHtml;
-    choiceButtons.style.display = 'block';
-    
-    // Добавляем обработчики для кнопок
-    if (telegramName) {
-      document.getElementById('useTelegramNameBtn').addEventListener('click', function() {
-        currentUser.name = telegramName;
-        currentUser.anonymous = false; // Имя из Telegram не анонимное
+    // Добавляем кнопку использования имени из авторизации, если оно есть
+    if (authName) {
+      const authNameBtn = document.createElement('button');
+      authNameBtn.className = 'papyrus-button shimmer';
+      authNameBtn.textContent = `Использовать имя: ${authName}`;
+      authNameBtn.addEventListener('click', function() {
+        currentUser.name = authName;
+        currentUser.anonymous = false;
         showScreen('gameScreen');
-        showNotification(`Используем имя: ${telegramName}`, 'success');
+        showNotification(`Используем имя: ${authName}`, 'success');
         loadGames();
       });
+      choiceButtons.appendChild(authNameBtn);
     }
     
-    document.getElementById('newNameBtn').addEventListener('click', showNewNameForm);
-    document.getElementById('existingNameBtn').addEventListener('click', showExistingNames);
-  }
-  
-  // Проверяем, есть ли сохраненные имена
-  const savedNames = getSavedNames();
-  const existingNameBtn = document.getElementById('existingNameBtn');
-  if (existingNameBtn) {
-    // Деактивируем кнопку, если нет сохраненных имен
+    // Кнопка "Придумать другое имя"
+    const newNameBtn = document.createElement('button');
+    newNameBtn.className = 'papyrus-button shimmer';
+    newNameBtn.textContent = 'Придумать другое имя';
+    newNameBtn.addEventListener('click', showNewNameForm);
+    choiceButtons.appendChild(newNameBtn);
+    
+    // Кнопка "Использовать сохраненное имя"
+    const existingNameBtn = document.createElement('button');
+    existingNameBtn.className = 'papyrus-button shimmer';
+    existingNameBtn.textContent = 'Использовать сохранённое имя';
+    existingNameBtn.addEventListener('click', showExistingNames);
+    
+    // Проверяем наличие сохраненных имен
+    const savedNames = getSavedNames();
     if (savedNames.length === 0) {
       existingNameBtn.classList.add('disabled');
-      existingNameBtn.style.opacity = '0.5';
+      existingNameBtn.disabled = true;
       existingNameBtn.title = 'Нет сохраненных имен';
-    } else {
-      existingNameBtn.classList.remove('disabled');
-      existingNameBtn.style.opacity = '1';
-      existingNameBtn.title = '';
     }
+    
+    choiceButtons.appendChild(existingNameBtn);
+    choiceButtons.style.display = 'block';
   }
 }
 
-// Функция для показа формы ввода нового имени
-function showNewNameForm() {
-  // Скрываем кнопки выбора
-  const choiceButtons = document.getElementById('nameChoiceButtons');
-  if (choiceButtons) choiceButtons.style.display = 'none';
-  
-  // Скрываем секцию существующих имен
-  const existingNameSection = document.getElementById('existingNameSection');
-  if (existingNameSection) existingNameSection.style.display = 'none';
-  
-  // Показываем форму нового имени
-  const newNameSection = document.getElementById('newNameSection');
-  if (newNameSection) newNameSection.style.display = 'block';
-  
-  // Фокус на поле ввода
+// Функция для сохранения имени пользователя
+function saveName() {
   const nameInput = document.getElementById('nameInput');
-  if (nameInput) nameInput.focus();
-}
-
-// Функция для показа списка сохраненных имен
-function showExistingNames() {
-  // Получаем сохраненные имена
-  const savedNames = getSavedNames();
-  if (savedNames.length === 0) {
-    showNotification('Нет сохраненных имен. Создайте новое имя.', 'info');
-    showNewNameForm();
+  if (!nameInput || !nameInput.value.trim()) {
+    showNotification('Пожалуйста, введите имя!', 'warning');
     return;
   }
   
-  // Скрываем кнопки выбора
-  const choiceButtons = document.getElementById('nameChoiceButtons');
-  if (choiceButtons) choiceButtons.style.display = 'none';
+  const name = nameInput.value.trim();
   
-  // Скрываем форму нового имени
-  const newNameSection = document.getElementById('newNameSection');
-  if (newNameSection) newNameSection.style.display = 'none';
-  
-  // Показываем секцию с сохраненными именами
-  const existingNameSection = document.getElementById('existingNameSection');
-  if (existingNameSection) existingNameSection.style.display = 'block';
-  
-  // Заполняем список сохраненных имен
-  const savedNamesList = document.getElementById('savedNamesList');
-  if (savedNamesList) {
-    let html = '';
-    savedNames.forEach((nameData) => {
-      html += `
-        <div class="game-item">
-          <h3>${nameData.name} ${nameData.anonymous ? '(анонимно)' : ''}</h3>
-          <div class="button-group">
-            <button class="papyrus-button shimmer" onclick="selectExistingName('${nameData.name}', ${nameData.anonymous})">Выбрать</button>
-            <button class="papyrus-button shimmer" onclick="deleteExistingName('${nameData.name}')">Удалить</button>
-          </div>
-        </div>
-      `;
-    });
-    savedNamesList.innerHTML = html;
-  }
-}
-
-// Функция для выбора существующего имени
-function selectExistingName(name, anonymous = false) {
-  console.log(`Выбрано имя: ${name}, анонимно: ${anonymous}`);
+  // Сохраняем имя
   currentUser.name = name;
-  currentUser.anonymous = anonymous;
-  showScreen('gameScreen');
-  showNotification(`Добро пожаловать, ${name}!`, 'success');
+  currentUser.anonymous = false;
   
-  // Реальная загрузка списка игр с сервера
+  // Добавляем имя в список сохраненных
+  const savedNames = getSavedNames();
+  if (!savedNames.includes(name)) {
+    savedNames.push(name);
+    saveNamesToStorage(savedNames);
+  }
+  
+  // Обновляем имя в данных авторизации
+  try {
+    const authData = localStorage.getItem('papaTrubokAuth');
+    if (authData) {
+      const parsedAuthData = JSON.parse(authData);
+      if (parsedAuthData) {
+        parsedAuthData.name = name;
+        localStorage.setItem('papaTrubokAuth', JSON.stringify(parsedAuthData));
+      }
+    }
+  } catch (error) {
+    console.error('Ошибка при обновлении имени в данных авторизации:', error);
+  }
+  
+  // Переходим на экран игр
+  showScreen('gameScreen');
+  showNotification(`Имя "${name}" сохранено!`, 'success');
+  
+  // Загружаем список игр
   loadGames();
 }
 
-// Функция для удаления существующего имени
-function deleteExistingName(name) {
-  const savedNames = getSavedNames();
-  const updatedNames = savedNames.filter(nameData => nameData.name !== name);
-  saveNamesToStorage(updatedNames);
-  
-  showNotification(`Имя ${name} удалено`, 'success');
-  
-  // Перезагружаем список имен
-  showExistingNames();
-  
-  // Если больше нет имен, показываем форму нового имени
-  if (updatedNames.length === 0) {
-    showNewNameForm();
-  }
-}
-
-// Получение сохраненных имен из localStorage для текущего пользователя
+// Функция для получения сохраненных имен из локального хранилища
 function getSavedNames() {
-  // Получаем уникальный ключ для текущего пользователя Telegram
-  const userId = getTelegramUserId();
-  const storageKey = `papaTrubokSavedNames_${userId}`;
-  
-  let savedNames = localStorage.getItem(storageKey);
-  
-  if (savedNames) {
-    try {
-      savedNames = JSON.parse(savedNames);
+  try {
+    const savedNamesJson = localStorage.getItem('papaTrubok_savedNames');
+    if (savedNamesJson) {
+      const savedNames = JSON.parse(savedNamesJson);
       if (Array.isArray(savedNames)) {
         return savedNames;
       }
-    } catch (e) {
-      console.error('Ошибка парсинга сохраненных имен:', e);
     }
+  } catch (error) {
+    console.error('Ошибка при загрузке сохраненных имен:', error);
   }
   
   return [];
 }
 
-// Сохранение имен в localStorage для текущего пользователя
+// Функция для сохранения имен в локальное хранилище
 function saveNamesToStorage(names) {
-  // Получаем уникальный ключ для текущего пользователя Telegram
-  const userId = getTelegramUserId();
-  const storageKey = `papaTrubokSavedNames_${userId}`;
-  
-  if (Array.isArray(names)) {
-    localStorage.setItem(storageKey, JSON.stringify(names));
+  try {
+    localStorage.setItem('papaTrubok_savedNames', JSON.stringify(names));
+  } catch (error) {
+    console.error('Ошибка при сохранении имен:', error);
   }
 }
 
-// Обновляем функцию saveName, чтобы всегда устанавливать anonymous в false
-function saveName() {
-  const nameInput = document.getElementById('nameInput');
-  if (!nameInput) {
-    console.error('Элемент ввода имени не найден!');
-    showNotification('Ошибка приложения. Попробуйте обновить страницу.', 'error');
-    return;
+// Функция для отображения формы ввода нового имени
+function showNewNameForm() {
+  // Скрываем выбор опций и показываем форму ввода
+  const nameChoiceButtons = document.getElementById('nameChoiceButtons');
+  const newNameSection = document.getElementById('newNameSection');
+  
+  if (nameChoiceButtons) nameChoiceButtons.style.display = 'none';
+  if (newNameSection) {
+    newNameSection.style.display = 'block';
+    
+    // Фокусируемся на поле ввода
+    const nameInput = document.getElementById('nameInput');
+    if (nameInput) {
+      nameInput.value = '';
+      nameInput.focus();
+    }
   }
+}
+
+// Функция для отображения списка существующих имен
+function showExistingNames() {
+  const nameChoiceButtons = document.getElementById('nameChoiceButtons');
+  const existingNameSection = document.getElementById('existingNameSection');
+  const savedNamesList = document.getElementById('savedNamesList');
   
-  const name = nameInput.value.trim();
-  if (name.length < 3) {
-    showNotification('Имя должно содержать минимум 3 символа', 'warning');
-    return;
+  if (nameChoiceButtons) nameChoiceButtons.style.display = 'none';
+  
+  if (existingNameSection && savedNamesList) {
+    existingNameSection.style.display = 'block';
+    
+    // Получаем сохраненные имена
+    const savedNames = getSavedNames();
+    
+    // Если нет сохраненных имен
+    if (savedNames.length === 0) {
+      savedNamesList.innerHTML = '<p class="no-games">У вас нет сохраненных имен</p>';
+      return;
+    }
+    
+    // Заполняем список имен
+    let namesHtml = '';
+    
+    savedNames.forEach(name => {
+      namesHtml += `
+        <div class="game-item">
+          <div class="game-info">
+            <h3>${name}</h3>
+          </div>
+          <div class="game-actions">
+            <button class="papyrus-button small-btn use-name-btn" data-name="${name}">Выбрать</button>
+            <button class="papyrus-button small-btn delete-name-btn" data-name="${name}">Удалить</button>
+          </div>
+        </div>
+      `;
+    });
+    
+    savedNamesList.innerHTML = namesHtml;
+    
+    // Добавляем обработчики для кнопок
+    const useNameBtns = savedNamesList.querySelectorAll('.use-name-btn');
+    useNameBtns.forEach(btn => {
+      btn.addEventListener('click', function() {
+        const name = this.getAttribute('data-name');
+        selectExistingName(name);
+      });
+    });
+    
+    const deleteNameBtns = savedNamesList.querySelectorAll('.delete-name-btn');
+    deleteNameBtns.forEach(btn => {
+      btn.addEventListener('click', function() {
+        const name = this.getAttribute('data-name');
+        deleteExistingName(name);
+      });
+    });
   }
-  
-  // Анонимность всегда отключена
-  const anonymous = false;
-  
-  console.log(`Сохраняем имя: ${name}, анонимно: ${anonymous}`);
+}
+
+// Функция для выбора существующего имени
+function selectExistingName(name) {
   currentUser.name = name;
-  currentUser.anonymous = anonymous;
+  currentUser.anonymous = false;
   
-  // Сохраняем имя в локальное хранилище
-  const savedNames = getSavedNames();
-  const existingNameIndex = savedNames.findIndex(nameData => nameData.name === name);
-  
-  if (existingNameIndex !== -1) {
-    // Обновляем существующее имя
-    savedNames[existingNameIndex].anonymous = anonymous;
-  } else {
-    // Добавляем новое имя
-    savedNames.push({ name, anonymous });
+  // Обновляем имя в данных авторизации
+  try {
+    const authData = localStorage.getItem('papaTrubokAuth');
+    if (authData) {
+      const parsedAuthData = JSON.parse(authData);
+      if (parsedAuthData) {
+        parsedAuthData.name = name;
+        localStorage.setItem('papaTrubokAuth', JSON.stringify(parsedAuthData));
+      }
+    }
+  } catch (error) {
+    console.error('Ошибка при обновлении имени в данных авторизации:', error);
   }
-  
-  saveNamesToStorage(savedNames);
   
   showScreen('gameScreen');
-  showNotification(`Добро пожаловать, ${name}!`, 'success');
-  
-  // Реальная загрузка списка игр с сервера
+  showNotification(`Выбрано имя: ${name}`, 'success');
   loadGames();
+}
+
+// Функция для удаления имени из списка сохраненных
+function deleteExistingName(name) {
+  // Получаем текущий список имен
+  const savedNames = getSavedNames();
+  
+  // Удаляем имя из списка
+  const updatedNames = savedNames.filter(savedName => savedName !== name);
+  
+  // Сохраняем обновленный список
+  saveNamesToStorage(updatedNames);
+  
+  // Обновляем список отображаемых имен
+  showExistingNames();
+  showNotification(`Имя "${name}" удалено`, 'info');
 }
 
 // Загрузка списка доступных игр
@@ -791,8 +1032,8 @@ async function joinGameRoom(gameId) {
               <p style="color: #2a9d8f; font-weight: bold; margin-bottom: 10px;">Ваш ответ принят!</p>
               <p style="color: #5a2d0c; font-style: italic;">"${currentGame.userAnswer}"</p>
               <p style="margin-top: 10px; color: #457b9d;">Ожидайте начала голосования.</p>
-      </div>
-    `;
+            </div>
+          `;
         }
       } else {
         userAnswerDisplay.style.display = 'none';
@@ -827,9 +1068,9 @@ async function startVoting(gameId) {
   try {
     if (!currentGame.isCreator) {
       showNotification('Только создатель может начать голосование', 'warning');
-    return;
-  }
-  
+      return;
+    }
+    
     const response = await fetch(`${API_URL}/games/${gameId}/startVoting`, {
       method: 'POST',
       headers: {
@@ -857,10 +1098,10 @@ async function startVoting(gameId) {
 
 // Функция для показа экрана ответа на вопрос
 function showAnswerScreen(question) {
-    if (!currentGame || !currentGame.id) {
+  if (!currentGame || !currentGame.id) {
     showNotification('Ошибка: информация об игре потеряна', 'error');
-        return;
-    }
+    return;
+  }
 
   console.log(`Показываем экран ответа на вопрос: "${question}"`);
   
@@ -872,7 +1113,7 @@ function showAnswerScreen(question) {
   // Очищаем поле ввода ответа перед показом
   const answerInput = document.getElementById('answerInput');
   if (answerInput) {
-        answerInput.value = '';
+    answerInput.value = '';
   }
   
   showScreen('answerScreen');
@@ -1171,10 +1412,10 @@ async function checkGameStatus() {
     // Реагируем на изменение статуса
     if (statusChanged) {
       if (gameData.status === 'voting') {
-      showNotification('Началось голосование! Переходим к выбору лучших ответов.', 'info');
+        showNotification('Началось голосование! Переходим к выбору лучших ответов.', 'info');
         loadVotingOptions(currentGame.id);
       } else if (gameData.status === 'results') {
-      showNotification('Голосование завершено! Переходим к результатам.', 'success');
+        showNotification('Голосование завершено! Переходим к результатам.', 'success');
         loadResults(currentGame.id);
       }
     }
@@ -1190,161 +1431,17 @@ async function checkGameStatus() {
 
 // Добавим функцию для проверки было ли уже отвечено на вопрос
 async function checkIfAnswered(gameId) {
-    try {
-        const response = await fetch(`${API_URL}/games/${gameId}/check-answer?userId=${currentUser.id}`);
-        
-        if (!response.ok) {
-            return false;
-        }
-        
-        const data = await response.json();
-        return data.hasAnswered;
-    } catch (error) {
-        console.error('Ошибка при проверке ответа:', error);
-        return false;
+  try {
+    const response = await fetch(`${API_URL}/games/${gameId}/check-answer?userId=${currentUser.id}`);
+    
+    if (!response.ok) {
+      return false;
     }
+    
+    const data = await response.json();
+    return data.hasAnswered;
+  } catch (error) {
+    console.error('Ошибка при проверке ответа:', error);
+    return false;
+  }
 }
-
-// Регистрация всех обработчиков событий для кнопок
-document.addEventListener('DOMContentLoaded', function() {
-  console.log('Инициализация приложения...');
-  
-  // Проверяем авторизацию перед инициализацией приложения
-  if (!checkAuth()) return;
-  
-  // Регистрация обработчика для кнопки "Начать игру" на экране правил
-  const startAppBtn = document.getElementById('startAppBtn');
-  if (startAppBtn) {
-    console.log('Найдена кнопка startAppBtn, добавляем обработчик');
-    startAppBtn.addEventListener('click', function() {
-      console.log('Нажата кнопка Начать игру на экране правил');
-      // Переходим к экрану ввода имени
-      showScreen('nameScreen');
-      // Показываем опции выбора имени
-      showNameChoiceOptions();
-    });
-  } else {
-    console.warn('Кнопка startAppBtn не найдена');
-  }
-  
-  // Регистрация обработчиков для кнопок выбора имени
-  const newNameBtn = document.getElementById('newNameBtn');
-  if (newNameBtn) {
-    newNameBtn.addEventListener('click', showNewNameForm);
-  }
-  
-  const existingNameBtn = document.getElementById('existingNameBtn');
-  if (existingNameBtn) {
-    existingNameBtn.addEventListener('click', showExistingNames);
-  }
-  
-  // Регистрация обработчиков для кнопок "Назад"
-  const backButtons = [
-    { id: 'backToNameChoiceBtn', action: showNameChoiceOptions },
-    { id: 'backToNameChoiceFromExistingBtn', action: showNameChoiceOptions },
-    { id: 'backToStartBtn', action: () => showScreen('startScreen') },
-    { id: 'backToMainFromQuestionBtn', action: () => showScreen('gameScreen') },
-    { id: 'backToMainFromAnswerBtn', action: () => showScreen('gameScreen') },
-    { id: 'backToMainFromVotingBtn', action: () => showScreen('gameScreen') },
-    { id: 'backToMainBtn', action: () => showScreen('gameScreen') }
-  ];
-  
-  backButtons.forEach(button => {
-    const element = document.getElementById(button.id);
-    if (element) {
-      element.addEventListener('click', button.action);
-    }
-  });
-  
-  // Регистрация обработчиков для функциональных кнопок
-  const submitNameBtn = document.getElementById('submitNameBtn');
-  if (submitNameBtn) {
-    submitNameBtn.addEventListener('click', saveName);
-  }
-  
-  const createGameBtn = document.getElementById('createGameBtn');
-  if (createGameBtn) {
-    createGameBtn.addEventListener('click', createNewGame);
-  }
-  
-  const refreshGamesBtn = document.getElementById('refreshGamesBtn');
-  if (refreshGamesBtn) {
-    refreshGamesBtn.addEventListener('click', loadGames);
-  }
-  
-  const submitQuestionBtn = document.getElementById('submitQuestionBtn');
-  if (submitQuestionBtn) {
-    submitQuestionBtn.addEventListener('click', saveQuestion);
-  }
-  
-  const submitAnswerBtn = document.getElementById('submitAnswerBtn');
-  if (submitAnswerBtn) {
-    submitAnswerBtn.addEventListener('click', submitAnswer);
-  }
-  
-  const submitVotesBtn = document.getElementById('submitVotesBtn');
-  if (submitVotesBtn) {
-    submitVotesBtn.addEventListener('click', submitVotes);
-  }
-
-  // Если мы внутри Telegram WebApp, готовим его
-if (window.Telegram && window.Telegram.WebApp) {
-    window.Telegram.WebApp.ready();
-    // Настраиваем обработчик кнопки "Назад"
-    window.Telegram.WebApp.BackButton.onClick(goBack);
-}
-});
-
-// Обработка ошибок
-window.addEventListener('error', function(event) {
-  console.error('Глобальная ошибка:', event.error || event.message);
-});
-
-// Инициализация обработчиков комнаты
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Инициализация обработчиков комнаты');
-    
-    // Кнопка "Ответить" в комнате
-    const answerButton = document.getElementById('answerButton');
-    if (answerButton) {
-        answerButton.addEventListener('click', function() {
-            if (currentGame && currentGame.currentQuestion) {
-                showAnswerScreen(currentGame.currentQuestion);
-            } else {
-                showNotification('Ошибка: вопрос не найден', 'error');
-            }
-        });
-    }
-    
-    // Кнопка "Начать голосование" в комнате
-    const startVotingButton = document.getElementById('startVotingButton');
-    if (startVotingButton) {
-        startVotingButton.addEventListener('click', function() {
-            if (currentGame && currentGame.id) {
-                startVoting(currentGame.id);
-            } else {
-                showNotification('Ошибка: игра не найдена', 'error');
-            }
-        });
-    }
-    
-    // Кнопка "Просмотр ответов" в комнате
-    const viewAnswersButton = document.getElementById('viewAnswersButton');
-    if (viewAnswersButton) {
-        viewAnswersButton.addEventListener('click', function() {
-            if (currentGame && currentGame.id) {
-                loadVotingOptions(currentGame.id);
-            } else {
-                showNotification('Ошибка: игра не найдена', 'error');
-            }
-        });
-    }
-    
-    // Кнопка "Покинуть комнату" в комнате
-    const leaveRoomButton = document.getElementById('leaveRoomButton');
-    if (leaveRoomButton) {
-        leaveRoomButton.addEventListener('click', function() {
-            loadGames();
-        });
-    }
-});

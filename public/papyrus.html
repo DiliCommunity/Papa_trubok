@@ -28,8 +28,6 @@
       };
     </script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <!-- Google Sign-In API -->
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
     <div class="container">
@@ -52,51 +50,8 @@
             <div class="scarab bottom-left">𓆣</div>
             <div class="scarab bottom-right">𓆣</div>
             
-            <!-- Экран авторизации -->
-            <div id="authScreen" style="display: block;">
-                <div class="title">
-                    <h1>PapaTrubok</h1>
-                    <p>Авторизация</p>
-                </div>
-                
-                <div class="auth-container">
-                    <p>Пожалуйста, войдите с помощью одного из способов:</p>
-                    
-                    <div class="auth-buttons">
-                        <!-- Telegram авторизация -->
-                        <button id="telegramLoginBtn" class="papyrus-button auth-button telegram-button">
-                            <svg class="auth-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M12 0C5.37 0 0 5.37 0 12C0 18.63 5.37 24 12 24C18.63 24 24 18.63 24 12C24 5.37 18.63 0 12 0ZM17.75 8.19C17.58 10.42 16.73 15.56 16.29 17.93C16.11 18.93 15.75 19.27 15.41 19.31C14.67 19.38 14.1 18.82 13.37 18.33C12.25 17.56 11.62 17.07 10.54 16.32C9.3 15.46 10.08 14.98 10.77 14.27C10.95 14.08 14.29 11.06 14.36 10.79C14.37 10.75 14.38 10.6 14.29 10.52C14.2 10.44 14.07 10.47 13.97 10.49C13.83 10.52 12.12 11.59 8.84 13.69C8.37 14 7.95 14.15 7.58 14.14C7.17 14.13 6.39 13.91 5.81 13.72C5.1 13.49 4.54 13.37 4.6 12.97C4.63 12.76 4.91 12.55 5.43 12.33C8.97 10.84 11.33 9.86 12.5 9.39C15.81 7.94 16.5 7.69 16.96 7.68C17.06 7.68 17.3 7.71 17.44 7.83C17.5 7.92 17.57 8.07 17.59 8.19C17.57 8.28 17.75 8.19 17.75 8.19Z"/>
-                            </svg>
-                            Войти через Telegram
-                        </button>
-                        
-                        <!-- Google авторизация -->
-                        <div id="g_id_onload"
-                             data-client_id="YOUR_GOOGLE_CLIENT_ID"
-                             data-callback="handleGoogleSignIn">
-                        </div>
-                        <div class="g_id_signin" data-type="standard"></div>
-                        
-                        <!-- Или обычная кнопка для Google аутентификации -->
-                        <button id="googleLoginBtn" class="papyrus-button auth-button google-button">
-                            <svg class="auth-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z"/>
-                            </svg>
-                            Войти через Google
-                        </button>
-                    </div>
-                    
-                    <p class="auth-info">Авторизация позволит сохранить ваши игры и прогресс</p>
-                    
-                    <button id="skipAuthBtn" class="papyrus-button shimmer skip-auth-btn">
-                        Продолжить без авторизации
-                    </button>
-                </div>
-            </div>
-            
             <!-- Экран запуска -->
-            <div id="startScreen" style="display: none;">
+            <div id="startScreen" style="display: block;">
                 <div class="title">
                     <h1>PapaTrubok</h1>
                     <p>Древнеегипетский свиток смешных вопросов</p>
