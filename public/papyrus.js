@@ -2,6 +2,24 @@
 const API_URL = window.location.origin;
 
 console.log("papyrus.js загружен");
+console.log("API URL:", API_URL);
+
+// Функция тестирования соединения с сервером
+async function testServerConnection() {
+  try {
+    console.log("Тестируем подключение к серверу...");
+    const response = await fetch(`${API_URL}/ping`);
+    const text = await response.text();
+    console.log(`Сервер ответил: ${text} (статус: ${response.status})`);
+    return response.ok;
+  } catch (error) {
+    console.error("Ошибка при подключении к серверу:", error);
+    return false;
+  }
+}
+
+// Запускаем тест соединения при загрузке
+setTimeout(testServerConnection, 1000);
 
 // Функция проверки авторизации
 function checkAuth() {
@@ -313,15 +331,79 @@ window.addEventListener('popstate', function(e) {
   }
 });
 
+// Обработчик события перед закрытием страницы
+window.addEventListener('beforeunload', function(event) {
+  console.log('Страница закрывается...');
+  
+  // Если пользователь находится в игре, сохраняем информацию
+  if (currentGame && currentGame.id) {
+    console.log(`Сохраняем информацию о игре ${currentGame.id}...`);
+    
+    try {
+      localStorage.setItem('papaTrubok_lastGame', JSON.stringify({
+        gameId: currentGame.id,
+        timestamp: Date.now()
+      }));
+    } catch (error) {
+      console.error('Не удалось сохранить информацию о последней игре:', error);
+    }
+  }
+});
+
+// При загрузке страницы проверяем, была ли активная игра
+function checkLastGame() {
+  try {
+    const lastGameInfo = localStorage.getItem('papaTrubok_lastGame');
+    if (lastGameInfo) {
+      const lastGame = JSON.parse(lastGameInfo);
+      const currentTime = Date.now();
+      
+      // Если прошло меньше 30 минут с момента последней игры, предлагаем вернуться
+      if (currentTime - lastGame.timestamp < 30 * 60 * 1000) {
+        showNotification(`У вас есть активная игра. Хотите вернуться?`, 'info');
+        
+        // Создаем кнопку для возврата в игру
+        const returnToGameBtn = document.createElement('button');
+        returnToGameBtn.className = 'papyrus-button shimmer';
+        returnToGameBtn.textContent = 'Вернуться в игру';
+        returnToGameBtn.addEventListener('click', function() {
+          if (currentUser && currentUser.name) {
+            joinGameRoom(lastGame.gameId);
+          } else {
+            // Сохраняем ID игры, чтобы вернуться после ввода имени
+            localStorage.setItem('papaTrubok_pendingGameId', lastGame.gameId);
+            showScreen('nameScreen');
+          }
+        });
+        
+        // Добавляем кнопку в DOM
+        const startButtons = document.querySelector('#startScreen .button-container');
+        if (startButtons) {
+          startButtons.prepend(returnToGameBtn);
+        }
+      } else {
+        // Удаляем устаревшую информацию
+        localStorage.removeItem('papaTrubok_lastGame');
+      }
+    }
+  } catch (error) {
+    console.error('Ошибка при проверке последней игры:', error);
+  }
+}
+
 // Инициализация приложения при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
-  console.log('DOMContentLoaded: Инициализация приложения');
+  console.log('DOM загружен, инициализируем приложение');
   
   // Проверяем авторизацию
-  if (!checkAuth()) {
-    return; // Если нет авторизации, остальной код не выполняется
-  }
-
+  checkAuth();
+  
+  // Проверяем была ли активная игра
+  checkLastGame();
+  
+  // Инициализация обработчиков кнопок
+  initButtonHandlers();
+  
   // Добавляем history state, чтобы сработал popstate
   history.pushState({page: 1}, "Папа Трубок", null);
   
@@ -343,14 +425,23 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }
   }
-  
-  // Инициализация обработчиков кнопок
-  initButtonHandlers();
 });
 
 // Инициализация обработчиков кнопок
 function initButtonHandlers() {
   console.log('Инициализация обработчиков всех кнопок приложения...');
+  
+  // Тестовая кнопка создания игры
+  const testCreateGameBtn = document.getElementById('testCreateGameBtn');
+  if (testCreateGameBtn) {
+    console.log('Найдена кнопка testCreateGameBtn');
+    testCreateGameBtn.addEventListener('click', function() {
+      console.log('Нажата кнопка "Тест создания игры"');
+      testCreateGame();
+    });
+  } else {
+    console.warn('Кнопка testCreateGameBtn не найдена');
+  }
   
   // Кнопка начала приложения
   const startAppBtn = document.getElementById('startAppBtn');
@@ -484,6 +575,14 @@ function initButtonHandlers() {
       }
       
       try {
+        // Проверяем, есть ли данные о пользователе
+        if (!currentUser || !currentUser.id || !currentUser.name) {
+          console.error('Нет данных о пользователе');
+          showNotification('Пожалуйста, введите ваше имя!', 'warning');
+          showScreen('nameScreen');
+          return;
+        }
+        
         // Создаем игру на сервере
         const question = questionInput.value.trim();
         const creatorName = currentUser.name || 'Анонимный';
@@ -495,6 +594,12 @@ function initButtonHandlers() {
         submitQuestionBtn.textContent = 'Создание...';
         
         console.log('Отправляем запрос на создание игры...');
+        console.log('Данные запроса:', JSON.stringify({
+          question: question,
+          userId: currentUser.id,
+          userName: creatorName
+        }));
+        
         const response = await fetch(`${API_URL}/games`, {
           method: 'POST',
           headers: {
@@ -502,13 +607,14 @@ function initButtonHandlers() {
           },
           body: JSON.stringify({
             question: question,
-            creatorId: currentUser.id,
-            creatorName: creatorName
+            userId: currentUser.id,
+            userName: creatorName
           })
         });
         
         if (!response.ok) {
           console.error(`Ошибка при создании игры, статус: ${response.status}`);
+          console.error('Текст ошибки:', await response.text());
           throw new Error(`Ошибка при создании игры: ${response.status}`);
         }
         
@@ -1088,6 +1194,11 @@ async function joinGameRoom(gameId) {
   
   try {
     console.log(`Отправляем запрос на присоединение к комнате ${gameId}`);
+    console.log('Данные запроса:', JSON.stringify({
+      userId: currentUser.id,
+      username: currentUser.name
+    }));
+    
     const response = await fetch(`${API_URL}/games/${gameId}/join`, {
       method: 'POST',
       headers: {
@@ -1095,14 +1206,20 @@ async function joinGameRoom(gameId) {
       },
       body: JSON.stringify({
         userId: currentUser.id,
-        username: currentUser.name
+        userName: currentUser.name  // Изменяем параметр на userName, чтобы соответствовать ожиданиям сервера
       })
     });
     
     if (!response.ok) {
       console.error(`Ошибка при присоединении к комнате, статус: ${response.status}`);
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Ошибка HTTP: ${response.status}`);
+      try {
+        const errorData = await response.json();
+        console.error('Данные ошибки:', errorData);
+        throw new Error(errorData.error || `Ошибка HTTP: ${response.status}`);
+      } catch (jsonError) {
+        console.error('Не удалось разобрать ответ как JSON:', await response.text());
+        throw new Error(`Ошибка HTTP: ${response.status}`);
+      }
     }
     
     const gameData = await response.json();
@@ -1781,4 +1898,49 @@ function startRoomUpdates(gameId) {
       }
     });
   }, 1000);
+}
+
+// Функция для тестирования создания игры напрямую
+async function testCreateGame() {
+  console.log("Тестируем создание игры...");
+  
+  if (!currentUser || !currentUser.id || !currentUser.name) {
+    console.error("Нельзя создать игру без имени пользователя");
+    showNotification("Сначала введите имя", "error");
+    return false;
+  }
+  
+  try {
+    const testQuestion = "Тестовый вопрос для проверки создания игры";
+    console.log(`Отправляем тестовый запрос на создание игры с вопросом: ${testQuestion}`);
+    
+    const response = await fetch(`${API_URL}/games`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        question: testQuestion,
+        userId: currentUser.id,
+        userName: currentUser.name
+      })
+    });
+    
+    if (!response.ok) {
+      console.error(`Ошибка при тестовом создании игры, статус: ${response.status}`);
+      const errorText = await response.text();
+      console.error('Текст ошибки:', errorText);
+      showNotification(`Ошибка создания тестовой игры: ${response.status}`, "error");
+      return false;
+    }
+    
+    const result = await response.json();
+    console.log("Игра успешно создана, результат:", result);
+    showNotification(`Тестовая игра создана! ID: ${result.gameId}`, "success");
+    return true;
+  } catch (error) {
+    console.error("Ошибка при тестировании создания игры:", error);
+    showNotification(`Ошибка: ${error.message}`, "error");
+    return false;
+  }
 }

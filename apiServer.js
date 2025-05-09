@@ -1144,8 +1144,9 @@ function notifyAboutResults(gameId) {
   }
 }
 
-// Эндпоинт для проверки доступности сервера (для UptimeRobot)
+// Эндпоинт для проверки соединения с сервером
 app.get('/ping', (req, res) => {
+  console.log('Получен запрос на /ping');
   res.status(200).send('pong');
 });
 
