@@ -1,5 +1,5 @@
 // Базовый URL для API
-const API_URL = window.location.origin + '/api';
+const API_URL = window.location.origin;
 
 console.log("papyrus.js загружен");
 
@@ -495,7 +495,7 @@ function initButtonHandlers() {
         submitQuestionBtn.textContent = 'Создание...';
         
         console.log('Отправляем запрос на создание игры...');
-        const response = await fetch(`${API_URL}/games/create`, {
+        const response = await fetch(`${API_URL}/games`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -519,9 +519,12 @@ function initButtonHandlers() {
         questionInput.value = '';
         
         // Переходим в созданную игру
-        currentGame = game;
-        console.log('Переходим в комнату игры');
-        joinGameRoom(game.id);
+        currentGame = {
+          id: game.gameId,
+          status: 'waiting_players'
+        };
+        console.log('Переходим в комнату игры с ID:', game.gameId);
+        joinGameRoom(game.gameId);
         showNotification('Игра успешно создана!', 'success');
       } catch (error) {
         console.error('Ошибка при создании игры:', error);
