@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход - Игра "Папа Трубок"</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .login-container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 30px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+        
+        .login-title {
+            font-size: 2em;
+            margin-bottom: 20px;
+            color: #ffffff;
+        }
+        
+        .login-form {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .login-input {
+            padding: 12px;
+            margin-bottom: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            border-radius: 5px;
+            font-size: 1em;
+        }
+        
+        .login-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px;
+            font-size: 1.1em;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+        
+        .login-btn:hover {
+            background: #45a049;
+        }
+        
+        .login-error {
+            color: #f44336;
+            margin-top: 10px;
+            display: none;
+        }
+        
+        .anonymous-checkbox {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            justify-content: flex-start;
+        }
+        
+        .anonymous-checkbox input {
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h1 class="login-title">Папа Трубок</h1>
+        <div class="login-form">
+            <input type="text" id="usernameInput" class="login-input" placeholder="Введите ваше имя">
+            <div class="anonymous-checkbox">
+                <input type="checkbox" id="anonymousCheckbox">
+                <label for="anonymousCheckbox">Играть анонимно</label>
+            </div>
+            <button id="loginBtn" class="login-btn">Войти</button>
+            <p id="loginError" class="login-error">Пожалуйста, введите имя</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const loginBtn = document.getElementById('loginBtn');
+            const usernameInput = document.getElementById('usernameInput');
+            const anonymousCheckbox = document.getElementById('anonymousCheckbox');
+            const loginError = document.getElementById('loginError');
+            
+            // Проверяем, авторизован ли пользователь
+            checkAuth();
+            
+            // Обработчик клика по кнопке входа
+            loginBtn.addEventListener('click', handleLogin);
+            
+            // Обработчик нажатия Enter
+            usernameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    handleLogin();
+                }
+            });
+            
+            // Функция для проверки авторизации
+            async function checkAuth() {
+                try {
+                    const response = await fetch('/api/auth/check');
+                    const data = await response.json();
+                    
+                    if (data.authenticated) {
+                        window.location.href = '/';
+                    }
+                } catch (error) {
+                    console.error('Ошибка проверки авторизации:', error);
+                }
+            }
+            
+            // Функция для обработки входа
+            async function handleLogin() {
+                const username = usernameInput.value.trim();
+                const isAnonymous = anonymousCheckbox.checked;
+                
+                if (!username) {
+                    loginError.style.display = 'block';
+                    return;
+                }
+                
+                loginError.style.display = 'none';
+                
+                try {
+                    const response = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            username,
+                            anonymous: isAnonymous
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('Ошибка при входе');
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        // Сохраняем информацию о режиме анонимности в localStorage
+                        localStorage.setItem('anonymous', isAnonymous);
+                        
+                        // Перенаправляем на главную страницу
+                        window.location.href = '/';
+                    } else {
+                        loginError.textContent = data.error || 'Ошибка при входе';
+                        loginError.style.display = 'block';
+                    }
+                } catch (error) {
+                    console.error('Ошибка при входе:', error);
+                    loginError.textContent = 'Произошла ошибка при входе';
+                    loginError.style.display = 'block';
+                }
+            }
+        });
+    </script>
+</body>
+</html> 

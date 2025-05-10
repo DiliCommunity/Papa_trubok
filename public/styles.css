@@ -188,4 +188,319 @@
     .game-room-actions button {
         width: 100%;
     }
+}
+
+/* Основные стили */
+body {
+    font-family: 'Roboto', sans-serif;
+    background-color: #121212;
+    color: #ffffff;
+    margin: 0;
+    padding: 0;
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+h1 {
+    color: #ffffff;
+    margin: 0;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.logout-btn {
+    background: #f44336;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.3s;
+}
+
+.logout-btn:hover {
+    background: #d32f2f;
+}
+
+/* Стили для экранов */
+.screen {
+    display: block;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+.hidden {
+    display: none;
+    opacity: 0;
+}
+
+/* Стили для списка игр */
+.games-list {
+    margin-bottom: 30px;
+}
+
+.create-game-btn {
+    background: #4CAF50;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    font-size: 1.1em;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.3s;
+    margin-top: 20px;
+}
+
+.create-game-btn:hover {
+    background: #45a049;
+}
+
+/* Стили для экрана ответов */
+.answer-form {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
+
+.question-box {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+#answerInput {
+    width: 100%;
+    min-height: 100px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    border-radius: 5px;
+    padding: 10px;
+    font-size: 1em;
+    margin-bottom: 15px;
+    resize: vertical;
+}
+
+.answer-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.submit-btn, .cancel-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.submit-btn {
+    background: #4CAF50;
+    color: white;
+}
+
+.submit-btn:hover {
+    background: #45a049;
+}
+
+.cancel-btn {
+    background: #f44336;
+    color: white;
+}
+
+.cancel-btn:hover {
+    background: #d32f2f;
+}
+
+/* Стили для голосования */
+.voting-container {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 20px;
+    border-radius: 10px;
+}
+
+.voting-options {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.voting-option {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 15px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.3s, transform 0.2s;
+}
+
+.voting-option:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+}
+
+.voting-option.selected {
+    background: rgba(76, 175, 80, 0.2);
+    border: 1px solid #4CAF50;
+}
+
+.vote-btn {
+    margin-top: 20px;
+    background: #FF9800;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.vote-btn:hover {
+    background: #F57C00;
+}
+
+/* Стили для результатов */
+.results-container {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 20px;
+    border-radius: 10px;
+}
+
+.results-list {
+    margin-top: 20px;
+}
+
+.result-item {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.result-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.result-name {
+    font-weight: 500;
+}
+
+.result-votes {
+    background: #9C27B0;
+    color: white;
+    padding: 3px 10px;
+    border-radius: 15px;
+    font-size: 0.9em;
+}
+
+.result-answer {
+    font-size: 1.1em;
+    margin-bottom: 5px;
+}
+
+.winner {
+    border: 2px solid gold;
+    position: relative;
+}
+
+.winner::before {
+    content: '👑';
+    position: absolute;
+    top: -15px;
+    left: 15px;
+    font-size: 1.5em;
+}
+
+/* Стили для уведомлений */
+.notification {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 15px 20px;
+    border-radius: 5px;
+    color: white;
+    font-weight: 500;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.notification.info {
+    background: #2196F3;
+}
+
+.notification.success {
+    background: #4CAF50;
+}
+
+.notification.warning {
+    background: #FF9800;
+}
+
+.notification.error {
+    background: #f44336;
+}
+
+.notification.fade-out {
+    animation: fadeOut 0.3s ease-in forwards;
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
+}
+
+/* Стили для кнопки "Назад" */
+.back-button {
+    background: #333;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.3s;
+}
+
+.back-button:hover {
+    background: #555;
 } 

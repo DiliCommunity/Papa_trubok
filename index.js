@@ -7,6 +7,14 @@ const userManager = require('./userManager');
 const nameScene = require('./scenes/nameScene');
 const answerScene = require('./scenes/answerScene');
 const customQuestionScene = require('./scenes/customQuestionScene');
+const express = require('express');
+const http = require('http');
+const socketIo = require('socket.io');
+const path = require('path');
+const bodyParser = require('body-parser');
+const cookieParser = require('cookie-parser');
+const cors = require('cors');
+const gameLogic = require('./gameLogic');
 
 dotenv.config();
 
@@ -969,4 +977,57 @@ bot.command('reset', async (ctx) => {
   
   // Отправляем сообщение о сбросе
   await ctx.reply('Ваши данные сброшены. Используйте /start для начала работы с ботом.');
+});
+
+const app = express();
+const server = http.createServer(app);
+const io = socketIo(server);
+
+// Middlewares
+app.use(cors());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(cookieParser());
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Делаем io доступным для маршрутизаторов
+app.io = io;
+
+// Подключаем маршрутизаторы
+app.use('/api/games', gamesRouter);
+
+// Обработка сокет-соединений
+io.on('connection', (socket) => {
+    console.log('Новое соединение:', socket.id);
+    
+    // Присоединение к комнате игры
+    socket.on('joinGame', (gameId) => {
+        console.log(`Пользователь ${socket.id} присоединился к игре ${gameId}`);
+        socket.join(gameId);
+    });
+    
+    // Покидание комнаты игры
+    socket.on('leaveGame', (gameId) => {
+        console.log(`Пользователь ${socket.id} покинул игру ${gameId}`);
+        socket.leave(gameId);
+    });
+    
+    // Отключение
+    socket.on('disconnect', () => {
+        console.log('Пользователь отключился:', socket.id);
+    });
+});
+
+// Обработка корневого маршрута
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Загружаем игры при запуске
+gameLogic.loadGames();
+
+// Запускаем сервер
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`Сервер запущен на порту ${PORT}`);
 });
