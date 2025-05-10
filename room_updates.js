@@ -212,4 +212,119 @@ async function submitAnswer() {
         console.error('Ошибка при отправке ответа:', error);
         showNotification('Произошла ошибка при отправке ответа', 'error');
     }
+}
+
+// Функция для обновления видимости комнаты
+function updateRoomVisibility(gameId, isVisible) {
+    const gameRoom = document.querySelector(`.game-room[data-game-id="${gameId}"]`);
+    if (gameRoom) {
+        gameRoom.style.display = isVisible ? 'block' : 'none';
+    }
+}
+
+// Функция для фильтрации комнат
+function filterRooms(filter) {
+    const gameRooms = document.querySelectorAll('.game-room');
+    gameRooms.forEach(room => {
+        const status = room.querySelector('.game-room-status').textContent;
+        const players = parseInt(room.querySelector('.game-room-player').textContent.match(/\d+/)[0]);
+        
+        let isVisible = true;
+        
+        switch (filter) {
+            case 'waiting':
+                isVisible = status.includes('Ожидание');
+                break;
+            case 'in_progress':
+                isVisible = status.includes('В процессе');
+                break;
+            case 'full':
+                isVisible = players >= 10;
+                break;
+            case 'empty':
+                isVisible = players === 0;
+                break;
+            case 'available':
+                isVisible = players < 10 && status.includes('Ожидание');
+                break;
+        }
+        
+        updateRoomVisibility(room.dataset.gameId, isVisible);
+    });
+}
+
+// Функция для сортировки комнат
+function sortRooms(sortBy) {
+    const gamesList = document.getElementById('gamesList');
+    const gameRooms = Array.from(gamesList.querySelectorAll('.game-room'));
+    
+    gameRooms.sort((a, b) => {
+        switch (sortBy) {
+            case 'players_asc':
+                return parseInt(a.querySelector('.game-room-player').textContent.match(/\d+/)[0]) -
+                       parseInt(b.querySelector('.game-room-player').textContent.match(/\d+/)[0]);
+            case 'players_desc':
+                return parseInt(b.querySelector('.game-room-player').textContent.match(/\d+/)[0]) -
+                       parseInt(a.querySelector('.game-room-player').textContent.match(/\d+/)[0]);
+            case 'name_asc':
+                return a.querySelector('.game-room-title').textContent.localeCompare(
+                    b.querySelector('.game-room-title').textContent
+                );
+            case 'name_desc':
+                return b.querySelector('.game-room-title').textContent.localeCompare(
+                    a.querySelector('.game-room-title').textContent
+                );
+            case 'status':
+                return a.querySelector('.game-room-status').textContent.localeCompare(
+                    b.querySelector('.game-room-status').textContent
+                );
+        }
+    });
+    
+    // Очищаем список и добавляем отсортированные комнаты
+    gamesList.innerHTML = '';
+    gameRooms.forEach(room => gamesList.appendChild(room));
+}
+
+// Добавляем обработчики событий для фильтров и сортировки
+document.addEventListener('DOMContentLoaded', () => {
+    const filterButtons = document.querySelectorAll('.filter-btn');
+    const sortSelect = document.querySelector('#sortRooms');
+    
+    filterButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            filterButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+            filterRooms(button.dataset.filter);
+        });
+    });
+    
+    if (sortSelect) {
+        sortSelect.addEventListener('change', () => {
+            sortRooms(sortSelect.value);
+        });
+    }
+});
+
+// Функция для обновления статуса комнаты
+function updateRoomStatus(gameId, status) {
+    const gameRoom = document.querySelector(`.game-room[data-game-id="${gameId}"]`);
+    if (gameRoom) {
+        const statusElement = gameRoom.querySelector('.game-room-status');
+        if (statusElement) {
+            statusElement.textContent = getStatusText(status);
+            statusElement.className = `game-room-status status-${status}`;
+        }
+    }
+}
+
+// Функция для обновления количества игроков
+function updateRoomPlayers(gameId, count) {
+    const gameRoom = document.querySelector(`.game-room[data-game-id="${gameId}"]`);
+    if (gameRoom) {
+        const playersElement = gameRoom.querySelector('.game-room-player');
+        if (playersElement) {
+            playersElement.textContent = `Игроков: ${count}/10`;
+        }
+    }
 } 

@@ -1,0 +1,191 @@
+/* Стили для комнат */
+.game-room {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+    transition: all 0.3s ease;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.game-room:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.game-room-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.game-room-title {
+    font-size: 1.5em;
+    color: #fff;
+    margin: 0;
+}
+
+.game-room-status {
+    padding: 5px 10px;
+    border-radius: 15px;
+    font-size: 0.9em;
+    font-weight: 500;
+}
+
+/* Статусы комнат */
+.status-waiting {
+    background: #4CAF50;
+    color: white;
+}
+
+.status-collecting_answers {
+    background: #2196F3;
+    color: white;
+}
+
+.status-voting {
+    background: #FF9800;
+    color: white;
+}
+
+.status-results {
+    background: #9C27B0;
+    color: white;
+}
+
+.game-room-info {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 15px;
+}
+
+.game-room-players {
+    color: #fff;
+    font-size: 0.9em;
+}
+
+.game-room-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* Кнопки действий */
+.join-room-btn,
+.answer-btn,
+.start-voting-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.join-room-btn {
+    background: #4CAF50;
+    color: white;
+}
+
+.join-room-btn:hover {
+    background: #45a049;
+}
+
+.answer-btn {
+    background: #2196F3;
+    color: white;
+}
+
+.answer-btn:hover {
+    background: #1976D2;
+}
+
+.start-voting-btn {
+    background: #FF9800;
+    color: white;
+}
+
+.start-voting-btn:hover {
+    background: #F57C00;
+}
+
+/* Фильтры и сортировка */
+.filters-container {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.filter-btn {
+    padding: 8px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 5px;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.filter-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.filter-btn.active {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+#sortRooms {
+    padding: 8px;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+}
+
+#sortRooms option {
+    background: #2c3e50;
+    color: #fff;
+}
+
+/* Анимации */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.game-room {
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .game-room-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    
+    .game-room-info {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .game-room-actions {
+        flex-direction: column;
+    }
+    
+    .game-room-actions button {
+        width: 100%;
+    }
+} 
