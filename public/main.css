@@ -50,6 +50,140 @@ body {
     overflow: hidden;
 }
 
+/* Стили для основного контейнера папируса */
+.papyrus {
+    max-width: 800px;
+    width: 100%;
+    height: 100%;
+    margin: 0 auto;
+    padding: 20px;
+    background: linear-gradient(135deg, var(--papyrus-light) 70%, var(--papyrus-dark) 100%);
+    color: var(--main-text-color);
+    position: relative;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    overflow-y: auto;
+    position: relative;
+}
+
+/* Декоративные элементы для папируса */
+.hieroglyph-border {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border: 2px solid var(--papyrus-border);
+    border-radius: 8px;
+    pointer-events: none;
+}
+
+.torn-edge {
+    position: absolute;
+    background-color: var(--torn-edge);
+}
+
+.top-edge, .bottom-edge {
+    height: 3px;
+    left: 20px;
+    right: 20px;
+}
+
+.left-edge, .right-edge {
+    width: 3px;
+    top: 20px;
+    bottom: 20px;
+}
+
+.top-edge {
+    top: 0;
+    clip-path: polygon(
+        0% 0%, 10% 100%, 20% 50%, 30% 100%, 40% 50%, 
+        50% 100%, 60% 50%, 70% 100%, 80% 50%, 90% 100%, 100% 0%
+    );
+}
+
+.bottom-edge {
+    bottom: 0;
+    clip-path: polygon(
+        0% 100%, 10% 0%, 20% 50%, 30% 0%, 40% 50%, 
+        50% 0%, 60% 50%, 70% 0%, 80% 50%, 90% 0%, 100% 100%
+    );
+}
+
+.left-edge {
+    left: 0;
+    clip-path: polygon(
+        0% 0%, 100% 10%, 50% 20%, 100% 30%, 50% 40%, 
+        100% 50%, 50% 60%, 100% 70%, 50% 80%, 100% 90%, 0% 100%
+    );
+}
+
+.right-edge {
+    right: 0;
+    clip-path: polygon(
+        100% 0%, 0% 10%, 50% 20%, 0% 30%, 50% 40%, 
+        0% 50%, 50% 60%, 0% 70%, 50% 80%, 0% 90%, 100% 100%
+    );
+}
+
+.worn-spot {
+    position: absolute;
+    background-color: rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+}
+
+.spot1 {
+    width: 100px;
+    height: 100px;
+    top: 50px;
+    right: 80px;
+    opacity: 0.2;
+}
+
+.spot2 {
+    width: 150px;
+    height: 80px;
+    bottom: 100px;
+    left: 30px;
+    opacity: 0.15;
+}
+
+.spot3 {
+    width: 70px;
+    height: 120px;
+    top: 200px;
+    left: 50%;
+    opacity: 0.1;
+}
+
+.scarab {
+    position: absolute;
+    font-size: 24px;
+    color: var(--hieroglyph-color);
+    opacity: 0.5;
+}
+
+.top-left {
+    top: 10px;
+    left: 10px;
+}
+
+.top-right {
+    top: 10px;
+    right: 10px;
+}
+
+.bottom-left {
+    bottom: 10px;
+    left: 10px;
+}
+
+.bottom-right {
+    bottom: 10px;
+    right: 10px;
+}
+
 .container {
     width: 100%;
     max-width: 100%;
@@ -1228,4 +1362,201 @@ textarea.form-input {
     .answer-section {
         padding: 10px;
     }
+}
+
+/* Стили для древних символов */
+.ancient-symbol {
+    font-size: 28px;
+    color: var(--hieroglyph-color);
+    opacity: 0.7;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.ancient-symbol.left {
+    left: 15px;
+}
+
+.ancient-symbol.right {
+    right: 15px;
+}
+
+/* Стили для полей ввода */
+.answer-input {
+    width: 100%;
+    background-color: var(--input-bg);
+    border: 2px solid var(--input-border);
+    border-radius: 8px;
+    padding: 12px 15px;
+    font-size: 16px;
+    color: var(--main-text-color);
+    resize: vertical;
+    min-height: 100px;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.answer-input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(164, 104, 67, 0.25);
+}
+
+/* Стили для вариантов ответов */
+.answer-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 15px 0;
+}
+
+.answer-option {
+    padding: 15px;
+    border-radius: 8px;
+    background-color: var(--papyrus-light);
+    border: 2px solid var(--papyrus-border);
+    position: relative;
+    transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s;
+    cursor: pointer;
+}
+
+.answer-option:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    background-color: var(--input-bg);
+}
+
+.answer-option.selected {
+    background-color: var(--highlight-color);
+    border-color: var(--accent-color);
+    box-shadow: 0 3px 10px rgba(164, 104, 67, 0.2);
+}
+
+.answer-option.selected::after {
+    content: "✓";
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--accent-color);
+    font-size: 20px;
+    font-weight: bold;
+}
+
+/* Стили для списка результатов */
+.results-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin: 15px 0;
+}
+
+.result-item {
+    padding: 15px;
+    border-radius: 8px;
+    background-color: var(--papyrus-light);
+    border: 2px solid var(--papyrus-border);
+    position: relative;
+}
+
+.result-item.winner {
+    background: linear-gradient(135deg, var(--papyrus-light), var(--accent-gold), var(--papyrus-light));
+    border-color: var(--accent-gold);
+    box-shadow: 0 5px 20px rgba(255, 204, 0, 0.25);
+}
+
+.result-player {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.result-answer {
+    font-style: italic;
+    color: var(--accent-color);
+}
+
+.result-votes {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background-color: var(--accent-color);
+    color: white;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+.result-place {
+    position: absolute;
+    left: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: var(--accent-gold);
+    color: var(--main-text-color);
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.medal-1 {
+    left: -15px;
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #FFD700, #FFC82F);
+    color: #7e5600;
+    box-shadow: 0 3px 10px rgba(255, 215, 0, 0.3);
+}
+
+.medal-2 {
+    background: linear-gradient(135deg, #C0C0C0, #E0E0E0);
+    color: #505050;
+}
+
+.medal-3 {
+    background: linear-gradient(135deg, #CD7F32, #E0965A);
+    color: #5e3a17;
+}
+
+/* Стили для input-area */
+.input-area {
+    margin: 20px 0;
+}
+
+.input-area p {
+    margin-bottom: 10px;
+    color: var(--accent-color);
+}
+
+.button-group {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    margin: 20px 0;
+}
+
+/* Стили для игровых комнат */
+.games-list-container {
+    margin: 20px 0;
+}
+
+.games-list-container h2 {
+    margin-bottom: 15px;
+    color: var(--accent-color);
+}
+
+.games-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
 }

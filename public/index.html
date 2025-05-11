@@ -4,90 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Игра "Папа Трубок"</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="main.css">
+    <script>
+        // Перенаправляем на основную версию приложения
+        window.location.href = 'papyrus.html';
+    </script>
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>Папа Трубок</h1>
-            <div class="user-info">
-                <span id="userName"></span>
-                <button id="logoutBtn" class="logout-btn">Выйти</button>
-            </div>
-        </header>
-
-        <main>
-            <div id="gamesScreen" class="screen">
-                <div class="controls">
-                    <div class="filters-container">
-                        <button class="filter-btn active" data-filter="all">Все</button>
-                        <button class="filter-btn" data-filter="waiting">Ожидание</button>
-                        <button class="filter-btn" data-filter="in_progress">В процессе</button>
-                        <button class="filter-btn" data-filter="available">Доступные</button>
-                        <button class="filter-btn" data-filter="full">Заполненные</button>
-                        <button class="filter-btn" data-filter="empty">Пустые</button>
-                    </div>
-                    
-                    <div class="sort-container">
-                        <select id="sortRooms">
-                            <option value="name_asc">По имени (А-Я)</option>
-                            <option value="name_desc">По имени (Я-А)</option>
-                            <option value="players_asc">По игрокам (возр.)</option>
-                            <option value="players_desc">По игрокам (убыв.)</option>
-                            <option value="status">По статусу</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div id="gamesList" class="games-list">
-                    <!-- Здесь будут отображаться комнаты -->
-                </div>
-
-                <button id="createGameBtn" class="create-game-btn">Создать новую игру</button>
-            </div>
-
-            <div id="gameScreen" class="screen hidden">
-                <div id="gameRoom" class="game-room">
-                    <!-- Здесь будет отображаться информация о текущей игре -->
-                </div>
-            </div>
-
-            <div id="answerScreen" class="screen hidden">
-                <div class="answer-form">
-                    <h2>Ваш ответ</h2>
-                    <div class="question-box">
-                        <h3>Вопрос:</h3>
-                        <p id="currentQuestion"></p>
-                    </div>
-                    <textarea id="answerInput" placeholder="Введите ваш ответ..."></textarea>
-                    <div class="answer-actions">
-                        <button id="submitAnswerBtn" class="submit-btn">Отправить</button>
-                        <button id="cancelAnswerBtn" class="cancel-btn">Отмена</button>
-                    </div>
-                </div>
-            </div>
-
-            <div id="votingScreen" class="screen hidden">
-                <div class="voting-container">
-                    <h2>Голосование</h2>
-                    <div id="votingOptions" class="voting-options">
-                        <!-- Здесь будут отображаться варианты ответов для голосования -->
-                    </div>
-                </div>
-            </div>
-
-            <div id="resultsScreen" class="screen hidden">
-                <div class="results-container">
-                    <h2>Результаты</h2>
-                    <div id="resultsList" class="results-list">
-                        <!-- Здесь будут отображаться результаты игры -->
-                    </div>
-                </div>
-            </div>
-        </main>
+        <h1>Папа Трубок</h1>
+        <p>Перенаправление на основное приложение...</p>
     </div>
-
-    <script src="socket.io/socket.io.js"></script>
-    <script src="app.js"></script>
 </body>
 </html> 
