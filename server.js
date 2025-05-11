@@ -116,7 +116,7 @@ app.get('*', (req, res) => {
 // gameLogic.loadGames();  // Закомментируем эту строку, так как метод не существует
 
 // Запускаем сервер
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
     console.log(`Сервер запущен на порту ${PORT}`);
 }); 

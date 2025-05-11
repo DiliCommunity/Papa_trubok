@@ -770,9 +770,9 @@ textarea.form-input {
     .notification-close {
         font-size: 1.3rem;
         margin-left: 8px;
-    }
-    
-    /* Оптимизация для iOS и других мобильных устройств */
+}
+
+/* Оптимизация для iOS и других мобильных устройств */
     input, textarea, select {
         font-size: 16px; /* Предотвращаем масштабирование на iOS */
     }
