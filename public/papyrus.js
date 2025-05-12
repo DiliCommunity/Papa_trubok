@@ -209,13 +209,13 @@ function getTelegramUserId() {
 
 // Получение имени пользователя из Telegram
 function getTelegramUserName() {
-  if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
-    const user = window.Telegram.WebApp.initDataUnsafe.user;
-    if (user.username) return user.username;
-    if (user.first_name) {
-      if (user.last_name) return `${user.first_name} ${user.last_name}`;
-      return user.first_name;
+  try {
+    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
+      const user = window.Telegram.WebApp.initDataUnsafe.user;
+      return formatTelegramName(user);
     }
+  } catch (error) {
+    console.error('Ошибка при получении имени пользователя Telegram:', error);
   }
   return '';
 }
@@ -1070,14 +1070,25 @@ function saveName() {
     return;
   }
   
-  const name = nameInput.value.trim();
+  let name = nameInput.value.trim();
   
   // Проверяем, есть ли у пользователя ID, если нет - генерируем новый
   if (!currentUser.id) {
     currentUser.id = String(Date.now()) + Math.random().toString(36).substring(2, 8);
   }
   
-  console.log(`Сохраняем имя "${name}" для пользователя ${currentUser.id}`);
+  // Добавляем часть ID пользователя к имени, чтобы сделать его уникальным
+  // Берем последние 4 символа из ID пользователя
+  const userIdSuffix = currentUser.id.slice(-4);
+  
+  // Проверяем, не содержит ли имя уже числовой суффикс в формате #XXXX
+  const suffixRegex = /#\d{4}$/;
+  if (!suffixRegex.test(name)) {
+    // Если суффикса нет, добавляем его
+    name = `${name}#${userIdSuffix}`;
+  }
+  
+  console.log(`Сохраняем уникальное имя "${name}" для пользователя ${currentUser.id}`);
   
   // Сохраняем имя пользователя
   currentUser.name = name;
@@ -1232,27 +1243,36 @@ function showExistingNames() {
 
 // Функция для выбора существующего имени
 function selectExistingName(name) {
-  if (!currentUser.id) {
-    currentUser.id = String(Date.now()) + Math.random().toString(36).substring(2, 8);
+  if (!name || !currentUser.id) {
+    showNotification('Ошибка при выборе имени', 'error');
+    return;
   }
   
-  currentUser.name = name;
+  // Проверяем наличие суффикса и добавляем его, если нужно
+  let uniqueName = name;
+  const suffixRegex = /#\d{4}$/;
+  if (!suffixRegex.test(uniqueName)) {
+    // Если суффикса нет, добавляем его
+    const userIdSuffix = currentUser.id.slice(-4);
+    uniqueName = `${uniqueName}#${userIdSuffix}`;
+  }
+  
+  // Обновляем имя пользователя
+  currentUser.name = uniqueName;
   currentUser.anonymous = false;
   
-  // Обновляем имя в данных авторизации
+  // Обновляем данные авторизации
   try {
     const authData = localStorage.getItem('papaTrubokAuth');
     if (authData) {
       const parsedAuthData = JSON.parse(authData);
-      if (parsedAuthData && parsedAuthData.userId === currentUser.id) {
-        parsedAuthData.name = name;
-        localStorage.setItem('papaTrubokAuth', JSON.stringify(parsedAuthData));
-      }
+      parsedAuthData.name = uniqueName;
+      localStorage.setItem('papaTrubokAuth', JSON.stringify(parsedAuthData));
     } else {
       // Если нет данных авторизации, создаем новые
       localStorage.setItem('papaTrubokAuth', JSON.stringify({
         userId: currentUser.id,
-        name: name,
+        name: uniqueName,
         method: 'manual',
         timestamp: Date.now()
       }));
@@ -1262,7 +1282,7 @@ function selectExistingName(name) {
   }
   
   showScreen('gameScreen');
-  showNotification(`Выбрано имя: ${name}`, 'success');
+  showNotification(`Выбрано имя: ${uniqueName}`, 'success');
   loadGames();
 }
 
@@ -1318,18 +1338,20 @@ async function loadGames() {
       else if (game.status === 'voting') statusClass = 'status-voting';
       else if (game.status === 'results') statusClass = 'status-results';
       
-      const answersCount = game.answers ? game.answers.length : 0;
-      const participantsCount = game.participants ? game.participants.length : 0;
+      // Получаем сокращенный ID игры для отображения
+      const shortId = game.id.substring(0, 6);
+      
+      // Отображаем вопрос игры, если он есть
+      const questionText = game.hasQuestion ? 'Вопрос уже загружен' : 'Ожидание вопроса...';
       
       gamesHtml += `
         <div class="game-item">
           <div class="game-info">
-            <h3>Игра #${game.id.substring(0, 6)}</h3>
-            <p>Вопрос: "${game.currentQuestion || 'Не указан'}"</p>
-            <p>Создатель: ${game.creator ? game.creator.name : 'Неизвестно'}</p>
+            <h3>Игра #${shortId}</h3>
+            <p class="game-creator">Создатель: ${game.name || 'Неизвестно'}</p>
+            <p class="game-question">${questionText}</p>
             <div class="game-stats">
-              <span class="game-stat">Участники: ${participantsCount}</span>
-              <span class="game-stat">Ответы: ${answersCount}</span>
+              <span class="game-stat">Участники: ${game.count || 0}</span>
               <span class="game-status ${statusClass}">${getStatusText(game.status)}</span>
             </div>
           </div>
@@ -1422,7 +1444,7 @@ async function joinGameRoom(gameId) {
       status: combinedData.status || 'collecting_answers',
       currentQuestion: combinedData.currentQuestion || 'Вопрос не указан',
       isCreator: combinedData.isCreator || false,
-      creator: combinedData.creator || { id: '', name: 'Неизвестно' },
+      initiatorName: combinedData.initiatorName || 'Неизвестно',
       answersCount: typeof combinedData.answers === 'number' ? combinedData.answers : (combinedData.answers ? combinedData.answers.length : 0),
       participants: combinedData.participants || []
     };
@@ -1442,194 +1464,119 @@ async function joinGameRoom(gameId) {
     updateRoomInfo();
     
     // Проверяем, ответил ли пользователь на вопрос
-    checkUserAnswerStatus(gameId);
+    const hasAnswered = await checkUserAnswerStatus(gameId);
+    
+    // Показываем кнопку "Ответить на вопрос", если вопрос есть и пользователь еще не ответил
+    const answerButton = document.getElementById('answerButton');
+    if (answerButton && currentGame.currentQuestion && 
+        (currentGame.status === 'collecting_answers' || currentGame.status === 'waiting_players') && 
+        !hasAnswered) {
+      answerButton.style.display = 'block';
+      
+      // Делаем кнопку заметной с анимацией
+      answerButton.classList.add('highlight-button');
+      setTimeout(() => {
+        answerButton.classList.remove('highlight-button');
+      }, 2000);
+    }
     
     // Запускаем периодическое обновление статуса комнаты
     startRoomUpdates(gameId);
     
-    // Показываем уведомление об успешном присоединении
-    showNotification('Вы присоединились к комнате!', 'success');
+    // Обновляем кнопку Ответа на вопрос
+    if (gameData.question && answerButton) {
+      answerButton.textContent = `Ответить на вопрос: "${gameData.question.substring(0, 30)}${gameData.question.length > 30 ? '...' : ''}"`;
+    }
     
-    return true;
+    showNotification('Вы успешно вошли в комнату!', 'success');
   } catch (error) {
     console.error('Ошибка при присоединении к комнате:', error);
-    showNotification(`Не удалось присоединиться к комнате: ${error.message}`, 'error');
-    // В случае ошибки возвращаемся к списку игр
-    showScreen('gameScreen');
-    loadGames();
-    return false;
+    showNotification('Ошибка при присоединении к комнате. Попробуйте позже.', 'error');
+    showScreen('gameScreen'); // Возвращаемся на экран списка игр
   }
 }
 
 // Функция для обновления информации о комнате
 function updateRoomInfo() {
-  if (!currentGame) {
-    console.error('Нет данных о текущей игре для обновления информации');
+  if (!currentGame || !currentGame.id) {
+    console.warn('Не установлен ID текущей игры');
     return;
   }
   
-  console.log('Обновляем информацию о комнате:', currentGame);
+  console.log('Обновление информации о комнате:', currentGame);
   
-  // Заголовок комнаты
+  // Заполняем заголовок комнаты
   const roomTitle = document.getElementById('roomTitle');
   if (roomTitle) {
     roomTitle.textContent = `Комната игры #${currentGame.id.substring(0, 6)}`;
   }
   
-  // Вопрос
+  // Заполняем вопрос
   const roomQuestion = document.getElementById('roomQuestion');
   if (roomQuestion) {
-    roomQuestion.textContent = currentGame.currentQuestion || 'Вопрос загружается...';
+    roomQuestion.textContent = currentGame.currentQuestion || 'Ожидание вопроса...';
   }
   
-  // Статус
+  // Заполняем статус
   const roomStatus = document.getElementById('roomStatus');
   if (roomStatus) {
-    roomStatus.textContent = getStatusText(currentGame.status);
-    
-    // Добавляем цветовую индикацию статуса
-    roomStatus.className = '';
-    if (currentGame.status === 'collecting_answers') roomStatus.classList.add('status-collecting');
-    else if (currentGame.status === 'voting') roomStatus.classList.add('status-voting');
-    else if (currentGame.status === 'results') roomStatus.classList.add('status-results');
+    roomStatus.textContent = getStatusText(currentGame.status || 'waiting_players');
   }
   
-  // Количество ответов
+  // Заполняем количество ответов
   const roomAnswersCount = document.getElementById('roomAnswersCount');
   if (roomAnswersCount) {
     roomAnswersCount.textContent = currentGame.answersCount || 0;
   }
   
-  // Показываем информацию о создателе
+  // Заполняем информацию о создателе
   const roomCreator = document.getElementById('roomCreator');
   if (roomCreator) {
-    let creatorName = 'Неизвестно';
-    if (currentGame.creator) {
-      if (typeof currentGame.creator === 'object' && currentGame.creator.name) {
-        creatorName = currentGame.creator.name;
-      } else if (typeof currentGame.creator === 'string') {
-        creatorName = currentGame.creator;
-      }
-    }
-    roomCreator.textContent = creatorName;
+    roomCreator.textContent = currentGame.initiatorName || 'Неизвестно';
   }
   
-  // Дополнительный запрос для обновления информации о комнате, если данные неполные
-  if (!currentGame.creator || !currentGame.currentQuestion) {
-    console.log('Не все данные о комнате доступны, запрашиваем дополнительную информацию');
-    
-    fetch(`${API_URL}/games/${currentGame.id}?userId=${currentUser.id}`)
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`Ошибка при получении дополнительной информации: ${response.status}`);
-        }
-        return response.json();
-      })
-      .then(data => {
-        console.log('Получены дополнительные данные о комнате:', data);
-        
-        // Обновляем данные
-        if (data.currentQuestion) {
-          currentGame.currentQuestion = data.currentQuestion;
-          if (roomQuestion) roomQuestion.textContent = data.currentQuestion;
-        }
-        
-        if (data.creator) {
-          currentGame.creator = data.creator;
-          if (roomCreator) {
-            let creatorName = 'Неизвестно';
-            if (data.creator) {
-              if (typeof data.creator === 'object' && data.creator.name) {
-                creatorName = data.creator.name;
-              } else if (typeof data.creator === 'string') {
-                creatorName = data.creator;
-              }
-            }
-            roomCreator.textContent = creatorName;
-          }
-        }
-        
-        if (typeof data.answers === 'number' || (data.answers && data.answers.length)) {
-          const answersCount = typeof data.answers === 'number' ? data.answers : data.answers.length;
-          currentGame.answersCount = answersCount;
-          if (roomAnswersCount) roomAnswersCount.textContent = answersCount;
-        }
-        
-        if (data.participants) {
-          currentGame.participants = data.participants;
-        }
-        
-        console.log('Данные комнаты обновлены:', currentGame);
-      })
-      .catch(error => {
-        console.error('Ошибка при получении дополнительной информации о комнате:', error);
-      });
-  }
-  
-  // Управляем кнопками в комнате
+  // Показываем/скрываем кнопки в зависимости от статуса игры и роли пользователя
   updateRoomButtons();
+  
+  // Проверяем ответ пользователя
+  updateUserAnswerDisplay();
 }
 
-// Функция для обновления состояния кнопок в комнате
+// Обновляем кнопки в комнате
 function updateRoomButtons() {
-  if (!currentGame) {
-    console.error('Нет данных о текущей игре для обновления кнопок');
-    return;
-  }
-  
-  console.log('Обновляем состояние кнопок в комнате. Статус игры:', currentGame.status);
+  if (!currentGame) return;
   
   const answerButton = document.getElementById('answerButton');
   const viewAnswersButton = document.getElementById('viewAnswersButton');
   const startVotingButton = document.getElementById('startVotingButton');
   
-  // Проверяем, ответил ли пользователь (асинхронно)
-  checkIfAnswered(currentGame.id).then(hasAnswered => {
-    console.log(`Пользователь ответил: ${hasAnswered}`);
-    
-    // Отображаем кнопку ответа только если пользователь еще не ответил и статус "сбор ответов"
-    if (answerButton) {
-      if (currentGame.status === 'collecting_answers' && !hasAnswered) {
-        console.log('Показываем кнопку ответа');
-        answerButton.style.display = 'block';
-      } else {
-        console.log('Скрываем кнопку ответа');
-        answerButton.style.display = 'none';
-      }
-    }
-    
-    // Если пользователь уже ответил, обновляем отображение его ответа
-    if (hasAnswered) {
-      updateUserAnswerDisplay();
-    }
-  }).catch(error => {
-    console.error('Ошибка при проверке ответа пользователя:', error);
-    // В случае ошибки показываем кнопку ответа по умолчанию
-    if (answerButton && currentGame.status === 'collecting_answers') {
-      answerButton.style.display = 'block';
-    }
-  });
+  // Получаем статус комнаты
+  const status = currentGame.status || 'waiting_players';
   
-  // Отображаем кнопку начала голосования только создателю, когда есть хотя бы 3 ответа
-  if (startVotingButton) {
-    if (currentGame.status === 'collecting_answers' && currentGame.isCreator && currentGame.answersCount >= 3) {
-      console.log('Показываем кнопку начала голосования (только для создателя)');
-      startVotingButton.style.display = 'block';
+  // Определяем видимость кнопки ответа
+  if (answerButton) {
+    if (status === 'collecting_answers' || status === 'waiting_players') {
+      // Проверяем, ответил ли уже пользователь
+      checkUserAnswerStatus(currentGame.id).then(hasAnswered => {
+        answerButton.style.display = hasAnswered ? 'none' : 'block';
+      });
     } else {
-      console.log('Скрываем кнопку начала голосования');
-      startVotingButton.style.display = 'none';
+      answerButton.style.display = 'none';
     }
   }
   
-  // Отображаем кнопку просмотра ответов только когда статус "голосование"
+  // Определяем видимость кнопки просмотра ответов
   if (viewAnswersButton) {
-    if (currentGame.status === 'voting') {
-      console.log('Показываем кнопку просмотра ответов');
-      viewAnswersButton.style.display = 'block';
-    } else {
-      console.log('Скрываем кнопку просмотра ответов');
-      viewAnswersButton.style.display = 'none';
-    }
+    viewAnswersButton.style.display = (status === 'voting') ? 'block' : 'none';
+  }
+  
+  // Определяем видимость кнопки начала голосования (только для создателя)
+  if (startVotingButton) {
+    const isCreator = currentGame.isCreator;
+    const hasMinAnswers = (currentGame.answersCount || 0) >= 3;
+    const canStartVoting = isCreator && hasMinAnswers && status === 'collecting_answers';
+    
+    startVotingButton.style.display = canStartVoting ? 'block' : 'none';
   }
 }
 
@@ -2325,4 +2272,34 @@ function stopRoomUpdates() {
     clearInterval(window.roomUpdateInterval);
     window.roomUpdateInterval = null;
   }
+}
+
+function formatTelegramName(user) {
+  if (!currentUser || !currentUser.id) {
+    // Если нет ID пользователя, сначала генерируем его
+    currentUser = currentUser || {};
+    currentUser.id = String(Date.now()) + Math.random().toString(36).substring(2, 8);
+  }
+  
+  // Получаем имя из профиля Telegram
+  let name = '';
+  if (user.username) {
+    name = user.username;
+  } else {
+    name = user.first_name || '';
+    if (user.last_name) {
+      name += ' ' + user.last_name;
+    }
+  }
+  
+  name = name.trim() || 'Пользователь Telegram';
+  
+  // Добавляем уникальный идентификатор
+  const userIdSuffix = currentUser.id.slice(-4);
+  const suffixRegex = /#\d{4}$/;
+  if (!suffixRegex.test(name)) {
+    name = `${name}#${userIdSuffix}`;
+  }
+  
+  return name;
 }

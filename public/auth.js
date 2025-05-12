@@ -137,14 +137,30 @@ function handleTelegramAuth() {
 
 // Форматирование имени пользователя Telegram
 function formatTelegramName(user) {
-    if (user.username) return user.username;
-    
-    let name = user.first_name || '';
-    if (user.last_name) {
-        name += ' ' + user.last_name;
+    // Создаем базовое имя
+    let name = '';
+    if (user.username) {
+        name = user.username;
+    } else {
+        name = user.first_name || '';
+        if (user.last_name) {
+            name += ' ' + user.last_name;
+        }
     }
     
-    return name.trim() || 'Пользователь Telegram';
+    name = name.trim() || 'Пользователь Telegram';
+    
+    // Добавляем уникальный идентификатор - последние 4 символа ID
+    const userId = user.id.toString();
+    const userIdSuffix = userId.slice(-4);
+    
+    // Проверяем, не содержит ли имя уже числовой суффикс в формате #XXXX
+    const suffixRegex = /#\d{4}$/;
+    if (!suffixRegex.test(name)) {
+        name = `${name}#${userIdSuffix}`;
+    }
+    
+    return name;
 }
 
 // Обработчик успешной авторизации через Google

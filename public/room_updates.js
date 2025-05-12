@@ -130,6 +130,26 @@ async function updateRoomButtons(gameData) {
         if (gameData.status === 'collecting_answers' && !hasAnswered) {
             answerButton.style.display = 'block';
             
+            // Обновляем текст кнопки, чтобы включить часть вопроса
+            if (gameData.currentQuestion) {
+                // Ограничиваем длину вопроса до 30 символов
+                const shortQuestion = gameData.currentQuestion.length > 30 
+                    ? gameData.currentQuestion.substring(0, 30) + '...' 
+                    : gameData.currentQuestion;
+                
+                answerButton.textContent = `Ответить на вопрос: "${shortQuestion}"`;
+                
+                // Добавляем анимацию если кнопка была скрыта
+                if (answerButton.style.display === 'none') {
+                    answerButton.classList.add('highlight-button');
+                    setTimeout(() => {
+                        answerButton.classList.remove('highlight-button');
+                    }, 2000);
+                }
+            } else {
+                answerButton.textContent = 'Ответить на вопрос';
+            }
+            
             // Добавляем обработчик события для кнопки, если его нет
             if (!answerButton.hasAttribute('data-has-handler')) {
                 answerButton.addEventListener('click', function() {

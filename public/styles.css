@@ -523,4 +523,82 @@ h1 {
 
 .telegram-button:hover {
     background: linear-gradient(45deg, #007bb8, #0095e6);
+}
+
+/* Добавляем стиль для подсветки кнопки */
+.highlight-button {
+  animation: highlight-pulse 2s ease-in-out;
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.8);
+}
+
+@keyframes highlight-pulse {
+  0% { transform: scale(1); box-shadow: 0 0 5px rgba(255, 215, 0, 0.5); }
+  50% { transform: scale(1.05); box-shadow: 0 0 15px rgba(255, 215, 0, 0.8); }
+  100% { transform: scale(1); box-shadow: 0 0 5px rgba(255, 215, 0, 0.5); }
+}
+
+/* Улучшаем стиль для элементов списка игр */
+.game-item {
+  margin-bottom: 20px;
+  padding: 15px;
+  border-radius: 8px;
+  background-color: rgba(245, 222, 179, 0.6);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.game-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
+}
+
+.game-creator, .game-question {
+  margin: 5px 0;
+  font-size: 0.95rem;
+}
+
+.game-creator {
+  color: #5a2d0c;
+  font-weight: bold;
+}
+
+.game-question {
+  color: #457b9d;
+  font-style: italic;
+}
+
+.room-status {
+  background-color: rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 15px;
+}
+
+.room-status p {
+  margin: 5px 0;
+  display: flex;
+  justify-content: space-between;
+}
+
+.room-status span {
+  font-weight: bold;
+  color: #5a2d0c;
+}
+
+#answerButton {
+  background-color: #3c940e;
+  color: white;
+  font-weight: bold;
+}
+
+#answerButton:hover {
+  background-color: #2d7109;
+}
+
+.user-answer-box {
+  background-color: rgba(255, 255, 255, 0.7);
+  border-radius: 8px;
+  padding: 15px;
+  margin: 15px 0;
+  border-left: 5px solid #2a9d8f;
 } 
