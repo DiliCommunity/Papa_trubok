@@ -44,12 +44,62 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     console.log('API_URL инициализирован:', API_URL);
     
-    // Инициализируем данные пользователя
-    currentUser = {
-        id: getTelegramUserId(),
-        name: '',
-        anonymous: false // Всегда будет false
-    };
+    // Инициализируем данные пользователя, используя Telegram ID если доступен
+    const telegramId = getTelegramUserId();
+    if (telegramId) {
+        currentUser = {
+            id: telegramId,
+            name: getTelegramUserName() || '',
+            anonymous: false
+        };
+        
+        // Сохраняем Telegram данные в локальное хранилище, если их там еще нет
+        try {
+            const authData = localStorage.getItem('papaTrubokAuth');
+            if (!authData) {
+                const newAuthData = {
+                    userId: telegramId,
+                    name: currentUser.name,
+                    method: 'telegram',
+                    timestamp: Date.now()
+                };
+                localStorage.setItem('papaTrubokAuth', JSON.stringify(newAuthData));
+                console.log('Сохранены данные авторизации из Telegram:', newAuthData);
+            }
+        } catch (error) {
+            console.error('Ошибка при сохранении данных Telegram:', error);
+        }
+    } else {
+        // Проверяем наличие сохраненных данных
+        const authData = localStorage.getItem('papaTrubokAuth');
+        if (authData) {
+            try {
+                const parsedAuthData = JSON.parse(authData);
+                currentUser = {
+                    id: parsedAuthData.userId,
+                    name: parsedAuthData.name || '',
+                    anonymous: false
+                };
+                console.log('Загружены данные пользователя из хранилища:', currentUser);
+            } catch (error) {
+                console.error('Ошибка при загрузке данных пользователя:', error);
+                currentUser = { 
+                    id: String(Date.now()) + Math.random().toString(36).substring(2, 8), 
+                    name: '', 
+                    anonymous: false 
+                };
+            }
+        } else {
+            // Создаем нового пользователя с уникальным ID
+            currentUser = { 
+                id: String(Date.now()) + Math.random().toString(36).substring(2, 8), 
+                name: '', 
+                anonymous: false 
+            };
+        }
+    }
+    
+    console.log('Инициализирован пользователь:', currentUser);
     
     // Проверяем соединение с сервером
     testServerConnection();
@@ -97,11 +147,14 @@ function checkAuth() {
     
     // Устанавливаем данные текущего пользователя из сохраненной авторизации
     if (parsedAuthData.userId) {
-      window.currentUser = window.currentUser || {};
-      window.currentUser.id = parsedAuthData.userId;
+      // Используем глобальную переменную currentUser вместо window.currentUser
+      currentUser = currentUser || {};
+      currentUser.id = parsedAuthData.userId;
       if (parsedAuthData.name) {
-        window.currentUser.name = parsedAuthData.name;
+        currentUser.name = parsedAuthData.name;
       }
+      
+      console.log('Авторизованный пользователь:', currentUser);
     }
     
     console.log('Пользователь авторизован:', parsedAuthData.method);
@@ -460,8 +513,25 @@ document.addEventListener('DOMContentLoaded', function() {
   // Инициализация обработчиков кнопок
   initButtonHandlers();
   
-  // Добавляем history state, чтобы сработал popstate
-  history.pushState({page: 1}, "Папа Трубок", null);
+  // Активно перехватываем события навигации по истории для предотвращения выхода из приложения
+  window.history.pushState({page: 1}, "Папа Трубок", null);
+  
+  // Это основной обработчик, предотвращающий выход из приложения
+  window.addEventListener('popstate', function(e) {
+    // Всегда предотвращаем стандартное поведение
+    e.preventDefault();
+    
+    // Наша собственная логика навигации
+    if (keyboardVisible) {
+      hideKeyboard();
+    } else {
+      goBack();
+    }
+    
+    // Важно: добавляем новое состояние в историю, чтобы браузер не закрыл приложение
+    window.history.pushState({page: 1}, "Папа Трубок", null);
+    return false;
+  });
   
   // Для Telegram WebApp устанавливаем дополнительный обработчик
   if (window.Telegram && window.Telegram.WebApp) {
@@ -477,6 +547,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Устанавливаем обработчик кнопки "Назад" Telegram
     if (window.Telegram.WebApp.BackButton) {
       window.Telegram.WebApp.BackButton.onClick(function() {
+        // Используем нашу кастомную логику возврата
         goBack();
       });
     }
@@ -984,7 +1055,18 @@ function saveName() {
       if (parsedAuthData) {
         parsedAuthData.name = name;
         localStorage.setItem('papaTrubokAuth', JSON.stringify(parsedAuthData));
+        console.log('Обновлены данные авторизации с новым именем:', name);
       }
+    } else {
+      // Если нет данных авторизации, создаем новые
+      const newAuthData = {
+        userId: currentUser.id || getTelegramUserId(),
+        name: name,
+        method: 'manual',
+        timestamp: Date.now()
+      };
+      localStorage.setItem('papaTrubokAuth', JSON.stringify(newAuthData));
+      console.log('Созданы новые данные авторизации:', newAuthData);
     }
   } catch (error) {
     console.error('Ошибка при обновлении имени в данных авторизации:', error);
@@ -1147,50 +1229,59 @@ async function loadGames() {
   if (!gamesList) return;
   
   try {
+    console.log('Загружаем список игр...');
     gamesList.innerHTML = '<p>Загрузка списка игр...</p>';
     
     const response = await fetch(`${API_URL}/games`);
     if (!response.ok) {
-      throw new Error(`Ошибка HTTP: ${response.status}`);
+      throw new Error(`Ошибка загрузки списка игр: ${response.status}`);
     }
     
     const games = await response.json();
+    console.log('Получен список игр:', games);
     
-    if (games.length === 0) {
-      gamesList.innerHTML = '<p>Нет доступных игр. Создайте новую!</p>';
+    if (!games || games.length === 0) {
+      gamesList.innerHTML = '<p class="no-games">Нет доступных игр. Создайте новую!</p>';
       return;
     }
     
-    gamesList.innerHTML = '';
+    let gamesHtml = '';
     
     games.forEach(game => {
-      const gameRoom = document.createElement('div');
-      gameRoom.className = 'game-room';
+      // Определяем класс статуса
+      let statusClass = 'status-waiting';
+      if (game.status === 'collecting_answers') statusClass = 'status-collecting';
+      else if (game.status === 'voting') statusClass = 'status-voting';
+      else if (game.status === 'results') statusClass = 'status-results';
       
-      gameRoom.innerHTML = `
-        <div class="game-room-header">
-          <h2 class="game-room-title">Комната: ${game.name}</h2>
-          <span class="game-room-status">${getStatusText(game.status)}</span>
-        </div>
-        
-        <div class="game-room-info">
-          <div class="game-room-players">
-            <span class="game-room-player">Игроков: ${game.count}/10</span>
+      const answersCount = game.answers ? game.answers.length : 0;
+      const participantsCount = game.participants ? game.participants.length : 0;
+      
+      gamesHtml += `
+        <div class="game-item">
+          <div class="game-info">
+            <h3>Игра #${game.id.substring(0, 6)}</h3>
+            <p>Вопрос: "${game.currentQuestion || 'Не указан'}"</p>
+            <p>Создатель: ${game.creator ? game.creator.name : 'Неизвестно'}</p>
+            <div class="game-stats">
+              <span class="game-stat">Участники: ${participantsCount}</span>
+              <span class="game-stat">Ответы: ${answersCount}</span>
+              <span class="game-status ${statusClass}">${getStatusText(game.status)}</span>
+            </div>
+          </div>
+          <div class="game-actions">
+            <button class="papyrus-button shimmer join-game-btn" onclick="joinGameRoom('${game.id}')">
+              Войти в комнату
+            </button>
           </div>
         </div>
-        
-        <div class="game-room-actions">
-          <button class="join-room-btn" onclick="joinGameRoom('${game.id}')">
-            Войти в комнату
-          </button>
-        </div>
       `;
-      
-      gamesList.appendChild(gameRoom);
     });
+    
+    gamesList.innerHTML = gamesHtml;
   } catch (error) {
-    console.error('Ошибка загрузки игр:', error);
-    gamesList.innerHTML = '<p>Ошибка при загрузке игр. Пожалуйста, попробуйте позже.</p>';
+    console.error('Ошибка при загрузке игр:', error);
+    gamesList.innerHTML = '<p class="error-message">Ошибка при загрузке игр. Попробуйте позже.</p>';
   }
 }
 
@@ -1199,8 +1290,8 @@ async function joinGameRoom(gameId) {
   console.log(`Присоединяемся к комнате ${gameId}`);
   
   if (!currentUser || !currentUser.id) {
-    console.warn('Не установлено имя пользователя');
-    showNotification('Сначала нужно ввести имя', 'warning');
+    console.warn('Не установлен ID пользователя');
+    showNotification('Сначала нужно авторизоваться', 'warning');
     showScreen('nameScreen');
     return;
   }
@@ -1219,9 +1310,10 @@ async function joinGameRoom(gameId) {
     console.log(`Отправляем запрос на присоединение к комнате ${gameId}`);
     console.log('Данные запроса:', JSON.stringify({
       userId: currentUser.id,
-      username: currentUser.name
+      userName: currentUser.name
     }));
     
+    // Отправляем запрос на присоединение к комнате
     const response = await fetch(`${API_URL}/games/${gameId}/join`, {
       method: 'POST',
       headers: {
@@ -1229,42 +1321,43 @@ async function joinGameRoom(gameId) {
       },
       body: JSON.stringify({
         userId: currentUser.id,
-        userName: currentUser.name  // Изменяем параметр на userName, чтобы соответствовать ожиданиям сервера
+        userName: currentUser.name
       })
     });
     
     if (!response.ok) {
       console.error(`Ошибка при присоединении к комнате, статус: ${response.status}`);
-      try {
-        const errorData = await response.json();
-        console.error('Данные ошибки:', errorData);
-        throw new Error(errorData.error || `Ошибка HTTP: ${response.status}`);
-      } catch (jsonError) {
-        console.error('Не удалось разобрать ответ как JSON:', await response.text());
-        throw new Error(`Ошибка HTTP: ${response.status}`);
-      }
+      const errorText = await response.text();
+      console.error('Ошибка:', errorText);
+      throw new Error(`Ошибка при присоединении к комнате: ${response.status}`);
     }
     
     const gameData = await response.json();
     console.log('Данные игры после присоединения:', gameData);
     
-    // Запоминаем данные текущей игры
+    // Сохраняем данные текущей игры
     currentGame = {
       id: gameId,
       status: gameData.status,
       currentQuestion: gameData.currentQuestion || 'Вопрос не указан',
       isCreator: gameData.isCreator || false,
-      initiatorName: gameData.initiatorName || 'Неизвестный',
-      answersCount: gameData.answers || 0,
+      creator: gameData.creator || { id: '', name: 'Неизвестно' },
+      answersCount: gameData.answers ? gameData.answers.length : 0,
       participants: gameData.participants || []
     };
     
-    console.log('Сохранены данные текущей игры:', currentGame);
+    console.log('Текущая игра установлена:', currentGame);
+    
+    // Присоединяемся к комнате через сокет, если поддерживается
+    if (window.socket) {
+      console.log('Присоединяемся к комнате через сокет');
+      window.socket.emit('joinGame', gameId);
+    }
     
     // Показываем экран комнаты
     showScreen('roomScreen');
     
-    // Заполняем информацию о комнате
+    // Обновляем интерфейс комнаты
     updateRoomInfo();
     
     // Проверяем, ответил ли пользователь на вопрос
@@ -1273,12 +1366,17 @@ async function joinGameRoom(gameId) {
     // Запускаем периодическое обновление статуса комнаты
     startRoomUpdates(gameId);
     
+    // Показываем уведомление об успешном присоединении
     showNotification('Вы присоединились к комнате!', 'success');
+    
+    return true;
   } catch (error) {
     console.error('Ошибка при присоединении к комнате:', error);
     showNotification(`Не удалось присоединиться к комнате: ${error.message}`, 'error');
     // В случае ошибки возвращаемся к списку игр
     showScreen('gameScreen');
+    loadGames();
+    return false;
   }
 }
 
@@ -1294,7 +1392,7 @@ function updateRoomInfo() {
   // Заголовок комнаты
   const roomTitle = document.getElementById('roomTitle');
   if (roomTitle) {
-    roomTitle.textContent = `Комната игры #${currentGame.id}`;
+    roomTitle.textContent = `Комната игры #${currentGame.id.substring(0, 6)}`;
   }
   
   // Вопрос
@@ -1307,12 +1405,25 @@ function updateRoomInfo() {
   const roomStatus = document.getElementById('roomStatus');
   if (roomStatus) {
     roomStatus.textContent = getStatusText(currentGame.status);
+    
+    // Добавляем цветовую индикацию статуса
+    roomStatus.className = '';
+    if (currentGame.status === 'collecting_answers') roomStatus.classList.add('status-collecting');
+    else if (currentGame.status === 'voting') roomStatus.classList.add('status-voting');
+    else if (currentGame.status === 'results') roomStatus.classList.add('status-results');
   }
   
   // Количество ответов
   const roomAnswersCount = document.getElementById('roomAnswersCount');
   if (roomAnswersCount) {
     roomAnswersCount.textContent = currentGame.answersCount || 0;
+  }
+  
+  // Показываем информацию о создателе
+  const roomCreator = document.getElementById('roomCreator');
+  if (roomCreator) {
+    const creatorName = currentGame.creator ? currentGame.creator.name : 'Неизвестно';
+    roomCreator.textContent = creatorName;
   }
   
   // Управляем кнопками в комнате
