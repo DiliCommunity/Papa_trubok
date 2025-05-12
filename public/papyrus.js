@@ -600,38 +600,63 @@ function initButtonHandlers() {
           userName: creatorName
         }));
         
-        const response = await fetch(`${API_URL}/games`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            question: question,
-            userId: currentUser.id,
-            userName: creatorName
-          })
-        });
-        
-        if (!response.ok) {
-          console.error(`Ошибка при создании игры, статус: ${response.status}`);
-          console.error('Текст ошибки:', await response.text());
-          throw new Error(`Ошибка при создании игры: ${response.status}`);
+        try {
+          const response = await fetch(`${API_URL}/games`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              question: question,
+              userId: currentUser.id,
+              userName: creatorName
+            })
+          });
+          
+          console.log('Получен ответ от сервера:', response.status);
+          
+          if (!response.ok) {
+            console.error(`Ошибка при создании игры, статус: ${response.status}`);
+            const errorText = await response.text();
+            console.error('Текст ошибки:', errorText);
+            throw new Error(`Ошибка при создании игры: ${response.status}`);
+          }
+          
+          const game = await response.json();
+          console.log('Игра успешно создана:', game);
+          
+          // Очищаем поле ввода
+          questionInput.value = '';
+          
+          // Переходим в созданную игру
+          currentGame = {
+            id: game.gameId || game.id,
+            status: 'collecting_answers',
+            isCreator: true,
+            currentQuestion: question
+          };
+          
+          console.log('Переходим в комнату игры с ID:', currentGame.id);
+          // Показываем уведомление о создании игры
+          showNotification('Игра успешно создана!', 'success');
+          // Иногда сервер может возвращать id вместо gameId, проверяем оба варианта
+          const gameId = game.gameId || game.id;
+          if (gameId) {
+            joinGameRoom(gameId);
+          } else {
+            console.error('Не удалось получить ID созданной игры');
+            showNotification('Не удалось получить ID игры. Попробуйте обновить список игр.', 'warning');
+            showScreen('gameScreen');
+            loadGames();
+          }
+        } catch (error) {
+          console.error('Ошибка при отправке запроса:', error);
+          showNotification(`Не удалось создать игру: ${error.message}`, 'error');
+          // В случае ошибки сети, предлагаем тестовое создание игры
+          if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+            showNotification('Проблема с сетью. Попробуйте позже или используйте тестовое создание игры.', 'warning');
+          }
         }
-        
-        const game = await response.json();
-        console.log('Игра успешно создана:', game);
-        
-        // Очищаем поле ввода
-        questionInput.value = '';
-        
-        // Переходим в созданную игру
-        currentGame = {
-          id: game.gameId,
-          status: 'waiting_players'
-        };
-        console.log('Переходим в комнату игры с ID:', game.gameId);
-        joinGameRoom(game.gameId);
-        showNotification('Игра успешно создана!', 'success');
       } catch (error) {
         console.error('Ошибка при создании игры:', error);
         showNotification('Не удалось создать игру. Попробуйте позже.', 'error');

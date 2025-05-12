@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const gameLogic = require('../gameLogic');
+const shortid = require('shortid');
 
 // Получение всех доступных игр
 router.get('/', (req, res) => {
@@ -14,19 +15,50 @@ router.get('/', (req, res) => {
 });
 
 // Создание новой игры
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
     try {
-        const { creatorId, creatorName } = req.body;
+        const { question, userId, userName } = req.body;
         
-        if (!creatorId || !creatorName) {
-            return res.status(400).json({ error: 'Требуется ID и имя создателя' });
+        if (!question || !userId || !userName) {
+            return res.status(400).json({ error: 'Отсутствуют обязательные параметры' });
         }
         
-        const game = gameLogic.createGame(creatorId, creatorName);
-        res.status(201).json(game);
+        // Создаем новую игру
+        const gameId = shortid.generate();
+        const newGame = {
+            id: gameId,
+            status: 'collecting_answers',
+            currentQuestion: question,
+            creator: {
+                id: userId,
+                name: userName
+            },
+            participants: [{ 
+                id: userId, 
+                name: userName 
+            }],
+            answers: [],
+            votes: [],
+            results: [],
+            createdAt: Date.now()
+        };
+        
+        // Добавляем игру в массив
+        gameLogic.addGame(newGame);
+        
+        // Сохраняем в JSON
+        gameLogic.writeGames();
+        
+        // Оповещаем всех клиентов о новой игре
+        if (req.app.io) {
+            req.app.io.emit('gameUpdate', { type: 'gameCreated', gameId });
+        }
+        
+        // Отправляем ID созданной игры
+        res.status(201).json({ gameId });
     } catch (error) {
         console.error('Ошибка при создании игры:', error);
-        res.status(500).json({ error: 'Ошибка сервера при создании игры' });
+        res.status(500).json({ error: 'Внутренняя ошибка сервера' });
     }
 });
 
