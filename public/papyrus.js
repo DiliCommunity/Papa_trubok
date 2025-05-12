@@ -850,11 +850,34 @@ function initButtonHandlers() {
     console.warn('Кнопка backToMainFromAnswerBtn не найдена');
   }
   
-  // Кнопка отправки ответа
+  // Обработчик нажатия Enter в поле ввода ответа
+  const answerInput = document.getElementById('answerInput');
+  if (answerInput) {
+    console.log('Найдено поле ввода ответа');
+    answerInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter' && e.ctrlKey) {
+        console.log('Нажат Ctrl+Enter в поле ввода ответа');
+        e.preventDefault();
+        document.getElementById('submitAnswerBtn')?.click();
+      }
+    });
+  } else {
+    console.warn('Поле ввода ответа не найдено');
+  }
+  
+  // Кнопка отправки ответа - правильно инициализируем обработчик
   const submitAnswerBtn = document.getElementById('submitAnswerBtn');
   if (submitAnswerBtn) {
     console.log('Найдена кнопка submitAnswerBtn');
-    submitAnswerBtn.addEventListener('click', submitAnswer);
+    // Удаляем существующие обработчики, чтобы избежать дублирования
+    submitAnswerBtn.removeEventListener('click', submitAnswer);
+    // Добавляем обработчик
+    submitAnswerBtn.addEventListener('click', function() {
+      console.log('Нажата кнопка "Отправить ответ"');
+      submitAnswer();
+    });
+  } else {
+    console.warn('Кнопка submitAnswerBtn не найдена');
   }
   
   // Кнопка отправки голосов
@@ -898,14 +921,21 @@ function initButtonHandlers() {
   const answerButton = document.getElementById('answerButton');
   if (answerButton) {
     console.log('Найдена кнопка answerButton');
-    answerButton.addEventListener('click', function() {
-      console.log('Нажата кнопка "Ответить на вопрос"');
-      if (currentGame && currentGame.currentQuestion) {
-        showAnswerScreen(currentGame.currentQuestion);
-      } else {
-        showNotification('Ошибка загрузки вопроса', 'error');
-      }
-    });
+    // Удаляем существующие обработчики, чтобы избежать дублирования
+    answerButton.replaceWith(answerButton.cloneNode(true));
+    // Получаем новую ссылку на элемент
+    const newAnswerButton = document.getElementById('answerButton');
+    if (newAnswerButton) {
+      newAnswerButton.addEventListener('click', function() {
+        console.log('Нажата кнопка "Ответить на вопрос"');
+        if (currentGame && currentGame.currentQuestion) {
+          showAnswerScreen(currentGame.currentQuestion);
+        } else {
+          showNotification('Ошибка загрузки вопроса', 'error');
+        }
+      });
+      console.log('Добавлен обработчик для кнопки "Ответить на вопрос"');
+    }
   }
   
   const startVotingButton = document.getElementById('startVotingButton');
@@ -976,21 +1006,6 @@ function initButtonHandlers() {
     console.warn('Поле ввода вопроса не найдено');
   }
   
-  // Обработчик нажатия Enter в поле ввода ответа
-  const answerInput = document.getElementById('answerInput');
-  if (answerInput) {
-    console.log('Найдено поле ввода ответа');
-    answerInput.addEventListener('keypress', function(e) {
-      if (e.key === 'Enter' && e.ctrlKey) {
-        console.log('Нажат Ctrl+Enter в поле ввода ответа');
-        e.preventDefault();
-        document.getElementById('submitAnswerBtn')?.click();
-      }
-    });
-  } else {
-    console.warn('Поле ввода ответа не найдено');
-  }
-  
   console.log('Инициализация обработчиков кнопок завершена');
 }
 
@@ -1013,44 +1028,40 @@ function showNameChoiceOptions() {
       console.log('Сгенерирован новый ID пользователя:', currentUser.id);
     }
     
-    // Получаем имя из данных авторизации
-    let authName = '';
-    try {
-      const authData = localStorage.getItem('papaTrubokAuth');
-      if (authData) {
-        const parsedAuthData = JSON.parse(authData);
-        if (parsedAuthData && parsedAuthData.name && parsedAuthData.userId === currentUser.id) {
-          authName = parsedAuthData.name;
-        }
-      }
-    } catch (error) {
-      console.error('Ошибка при получении имени из данных авторизации:', error);
-    }
-    
-    // Создаем HTML для кнопок
+    // Очищаем содержимое и создаем 3 основные кнопки
     choiceButtons.innerHTML = '';
     
-    // Добавляем кнопку использования имени из авторизации, если оно есть
-    if (authName) {
-      const authNameBtn = document.createElement('button');
-      authNameBtn.className = 'papyrus-button shimmer';
-      authNameBtn.textContent = `Использовать имя: ${authName}`;
-      authNameBtn.addEventListener('click', function() {
-        currentUser.name = authName;
-        currentUser.anonymous = false;
-        showScreen('gameScreen');
-        showNotification(`Используем имя: ${authName}`, 'success');
-        loadGames();
-      });
-      choiceButtons.appendChild(authNameBtn);
+    // 1. Кнопка "Создать новое имя"
+    const newNameBtn = document.createElement('button');
+    newNameBtn.className = 'papyrus-button shimmer';
+    newNameBtn.textContent = 'Создать новое имя';
+    newNameBtn.addEventListener('click', showNewNameForm);
+    choiceButtons.appendChild(newNameBtn);
+    
+    // 2. Кнопка "Выбрать существующее имя"
+    const existingNameBtn = document.createElement('button');
+    existingNameBtn.className = 'papyrus-button shimmer';
+    existingNameBtn.textContent = 'Выбрать сохранённое имя';
+    existingNameBtn.addEventListener('click', showExistingNames);
+    
+    // Проверяем наличие сохраненных имен
+    const savedNames = getSavedNames(currentUser.id);
+    console.log(`Найдено ${savedNames.length} сохраненных имен для пользователя ${currentUser.id}`);
+    
+    if (savedNames.length === 0) {
+      existingNameBtn.classList.add('disabled');
+      existingNameBtn.disabled = true;
+      existingNameBtn.title = 'Нет сохраненных имен';
     }
     
-    // Добавляем кнопку использования ника из Telegram, если он доступен
+    choiceButtons.appendChild(existingNameBtn);
+    
+    // 3. Кнопка "Войти с ником из Telegram"
     const telegramName = getTelegramUserName();
-    if (telegramName && (!authName || telegramName !== authName)) {
+    if (telegramName) {
       const telegramNameBtn = document.createElement('button');
       telegramNameBtn.className = 'papyrus-button shimmer telegram-button';
-      telegramNameBtn.textContent = `Использовать ник из Telegram: ${telegramName}`;
+      telegramNameBtn.textContent = `Войти с ником из Telegram: ${telegramName}`;
       telegramNameBtn.addEventListener('click', function() {
         currentUser.name = telegramName;
         currentUser.anonymous = false;
@@ -1064,21 +1075,12 @@ function showNameChoiceOptions() {
         
         // Обновляем данные авторизации
         try {
-          const authData = localStorage.getItem('papaTrubokAuth');
-          if (authData) {
-            const parsedAuthData = JSON.parse(authData);
-            parsedAuthData.name = telegramName;
-            parsedAuthData.userId = currentUser.id;
-            localStorage.setItem('papaTrubokAuth', JSON.stringify(parsedAuthData));
-          } else {
-            // Если данных авторизации нет, создаем новые
-            localStorage.setItem('papaTrubokAuth', JSON.stringify({
-              userId: currentUser.id,
-              name: telegramName,
-              method: 'telegram',
-              timestamp: Date.now()
-            }));
-          }
+          localStorage.setItem('papaTrubokAuth', JSON.stringify({
+            userId: currentUser.id,
+            name: telegramName,
+            method: 'telegram',
+            timestamp: Date.now()
+          }));
         } catch (error) {
           console.error('Ошибка при обновлении имени в данных авторизации:', error);
         }
@@ -1088,33 +1090,10 @@ function showNameChoiceOptions() {
         loadGames();
       });
       choiceButtons.appendChild(telegramNameBtn);
+    } else {
+      console.log('Имя из Telegram недоступно');
     }
     
-    // Кнопка "Придумать другое имя"
-    const newNameBtn = document.createElement('button');
-    newNameBtn.className = 'papyrus-button shimmer';
-    newNameBtn.textContent = 'Придумать другое имя';
-    newNameBtn.addEventListener('click', showNewNameForm);
-    choiceButtons.appendChild(newNameBtn);
-    
-    // Получаем сохраненные имена для текущего пользователя
-    const savedNames = getSavedNames(currentUser.id);
-    console.log(`Найдено ${savedNames.length} сохраненных имен для пользователя ${currentUser.id}`);
-    
-    // Кнопка "Использовать сохраненное имя" - активна только если есть сохраненные имена
-    const existingNameBtn = document.createElement('button');
-    existingNameBtn.className = 'papyrus-button shimmer';
-    existingNameBtn.textContent = 'Использовать сохранённое имя';
-    existingNameBtn.addEventListener('click', showExistingNames);
-    
-    // Проверяем наличие сохраненных имен
-    if (savedNames.length === 0) {
-      existingNameBtn.classList.add('disabled');
-      existingNameBtn.disabled = true;
-      existingNameBtn.title = 'Нет сохраненных имен';
-    }
-    
-    choiceButtons.appendChild(existingNameBtn);
     choiceButtons.style.display = 'block';
   }
 }
@@ -1409,9 +1388,22 @@ async function loadGames() {
       return;
     }
     
+    // Создаем Map для отслеживания уникальных комнат по id
+    const uniqueGames = new Map();
+    
+    // Добавляем только уникальные игры в Map
+    games.forEach(game => {
+      if (!uniqueGames.has(game.id)) {
+        uniqueGames.set(game.id, game);
+      }
+    });
+    
+    console.log(`Уникальных игр: ${uniqueGames.size} из ${games.length}`);
+    
     let gamesHtml = '';
     
-    games.forEach(game => {
+    // Используем уникальные игры для отображения
+    uniqueGames.forEach(game => {
       // Определяем класс статуса
       let statusClass = 'status-waiting';
       if (game.status === 'collecting_answers') statusClass = 'status-collecting';
