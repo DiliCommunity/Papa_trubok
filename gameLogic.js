@@ -1,4 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
+const shortid = require('shortid');
+const fs = require('fs');
 
 class GameLogic {
     constructor() {
@@ -40,9 +42,13 @@ class GameLogic {
     }
 
     writeGames() {
-        console.log('Сохраняем игры в JSON файл...');
-        // Здесь должен быть код для сохранения в файл
-        return true;
+        try {
+            const gamesArray = Array.from(this.games.values());
+            fs.writeFileSync('games.json', JSON.stringify(gamesArray, null, 2), 'utf8');
+            console.log(`Сохранено ${gamesArray.length} игр в games.json`);
+        } catch (error) {
+            console.error('Ошибка при сохранении игр в JSON:', error);
+        }
     }
 
     joinGame(gameId, userId, userName) {
@@ -112,61 +118,79 @@ class GameLogic {
         return game;
     }
 
-    submitAnswer(gameId, userId, answer, isAnonymous = false) {
+    submitAnswer(gameId, userId, answer, anonymous = false) {
         const game = this.games.get(gameId);
+        
         if (!game) {
             throw new Error('Игра не найдена');
         }
-
+        
         if (game.status !== 'collecting_answers') {
-            throw new Error('Сейчас нельзя отправить ответ');
+            throw new Error('В данный момент нельзя отправлять ответы');
         }
-
-        if (!game.currentQuestion) {
-            throw new Error('Вопрос еще не задан');
+        
+        // Проверяем, не ответил ли уже пользователь
+        const existingAnswer = game.answers.find(a => a.userId === userId);
+        if (existingAnswer) {
+            throw new Error('Вы уже ответили на этот вопрос');
         }
-
-        const player = game.participants.find(p => p.id === userId);
-        if (!player) {
-            throw new Error('Вы не участвуете в этой игре');
+        
+        // Добавляем ответ
+        const participant = game.participants.find(p => p.id === userId);
+        if (!participant) {
+            throw new Error('Вы не являетесь участником этой игры');
         }
-
-        // Проверяем, не ответил ли уже игрок
-        if (game.answers.some(a => a.userId === userId)) {
-            throw new Error('Вы уже отправили ответ');
-        }
-
+        
         game.answers.push({
-            userId,
-            userName: isAnonymous ? 'Аноним' : player.name,
-            answer,
-            submittedAt: new Date().toISOString(),
-            isAnonymous
+            id: shortid.generate(),
+            userId: userId,
+            userName: participant.name,
+            text: answer,
+            anonymous: anonymous,
+            timestamp: Date.now()
         });
-
+        
+        // Сохраняем изменения
+        this.writeGames();
+        
+        // Если собрано 10 ответов, автоматически начинаем голосование
+        if (game.answers.length >= 10) {
+            try {
+                this.startVoting(gameId, game.creator.id);
+            } catch (error) {
+                console.error('Ошибка при автоматическом запуске голосования:', error);
+            }
+        }
+        
         return game;
     }
 
-    startVoting(gameId, creatorId) {
+    startVoting(gameId, userId) {
         const game = this.games.get(gameId);
+        
         if (!game) {
             throw new Error('Игра не найдена');
         }
-
-        if (game.creator.id !== creatorId) {
-            throw new Error('Только создатель может начать голосование');
-        }
-
+        
         if (game.status !== 'collecting_answers') {
-            throw new Error('Нельзя начать голосование в текущем статусе игры');
+            throw new Error('Игра не находится в фазе сбора ответов');
         }
-
-        if (game.answers.length < game.settings.minAnswersToStartVoting) {
-            throw new Error(`Нужно минимум ${game.settings.minAnswersToStartVoting} ответов для начала голосования`);
+        
+        if (game.creator.id !== userId) {
+            throw new Error('Только создатель игры может запустить голосование');
         }
-
+        
+        if (game.answers.length < 3) {
+            throw new Error('Для начала голосования нужно минимум 3 ответа');
+        }
+        
+        // Меняем статус игры на голосование
         game.status = 'voting';
-        game.votingStartedAt = new Date().toISOString();
+        game.votingStartedAt = Date.now();
+        
+        // Сохраняем изменения
+        this.writeGames();
+        
         return game;
     }
 
@@ -244,6 +268,49 @@ class GameLogic {
 
     deleteGame(gameId) {
         return this.games.delete(gameId);
+    }
+
+    // Проверка, ответил ли пользователь на вопрос
+    hasUserAnswered(gameId, userId) {
+        const game = this.games.get(gameId);
+        
+        if (!game) {
+            throw new Error('Игра не найдена');
+        }
+        
+        return game.answers.some(a => a.userId === userId);
+    }
+
+    // Получение ответа пользователя
+    getUserAnswer(gameId, userId) {
+        const game = this.games.get(gameId);
+        
+        if (!game) {
+            throw new Error('Игра не найдена');
+        }
+        
+        const answer = game.answers.find(a => a.userId === userId);
+        return answer ? answer.text : null;
+    }
+
+    // Загрузка всех игр из JSON
+    loadGames() {
+        try {
+            const data = fs.readFileSync('games.json', 'utf8');
+            const games = JSON.parse(data);
+            
+            // Преобразуем массив в Map
+            this.games.clear();
+            games.forEach(game => {
+                this.games.set(game.id, game);
+            });
+            
+            console.log(`Загружено ${this.games.size} игр из games.json`);
+        } catch (error) {
+            console.error('Ошибка при загрузке игр из JSON:', error);
+            // Если файл не существует или имеет неверный формат, создаем новый
+            this.writeGames();
+        }
     }
 }
 

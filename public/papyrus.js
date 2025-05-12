@@ -321,7 +321,7 @@ function goBack() {
       }
     }
   } else {
-    // Если истории нет, возвращаемся на начальный экран
+    // Если истории нет, возвращаемся на начальный экран вместо выхода из приложения
     showScreen('startScreen');
   }
 }
@@ -367,13 +367,24 @@ document.addEventListener('focusout', function(e) {
 
 // Добавляем обработчик для аппаратной кнопки "Назад" на Android
 window.addEventListener('popstate', function(e) {
-  // Предотвращаем стандартное поведение только если клавиатура открыта
+  e.preventDefault(); // Всегда предотвращаем стандартное поведение кнопки назад
+  
+  // Обрабатываем нажатие кнопки "Назад"
   if (keyboardVisible) {
-    e.preventDefault();
     hideKeyboard();
   } else {
-    goBack();
+    goBack(); // Наша собственная логика навигации назад
   }
+  
+  // Добавляем новое состояние в историю, чтобы предотвратить выход из приложения
+  history.pushState({page: 'current'}, document.title, window.location.href);
+  
+  return false;
+});
+
+// Добавляем начальное состояние в историю при загрузке страницы
+window.addEventListener('load', function() {
+  history.pushState({page: 'initial'}, document.title, window.location.href);
 });
 
 // Обработчик события перед закрытием страницы
@@ -734,66 +745,7 @@ function initButtonHandlers() {
   const submitAnswerBtn = document.getElementById('submitAnswerBtn');
   if (submitAnswerBtn) {
     console.log('Найдена кнопка submitAnswerBtn');
-    submitAnswerBtn.addEventListener('click', async function() {
-      console.log('Нажата кнопка "Отправить ответ"');
-      const answerInput = document.getElementById('answerInput');
-      if (!answerInput || !answerInput.value.trim()) {
-        console.warn('Не введен ответ');
-        showNotification('Пожалуйста, введите ответ!', 'warning');
-        return;
-      }
-      
-      if (!currentGame || !currentGame.id) {
-        console.error('Нет информации о текущей игре');
-        showNotification('Ошибка: не удалось определить игру', 'error');
-        return;
-      }
-      
-      try {
-        // Отправляем ответ на сервер
-        const answer = answerInput.value.trim();
-        console.log(`Отправляем ответ: "${answer}" для игры ${currentGame.id}`);
-        
-        submitAnswerBtn.disabled = true;
-        submitAnswerBtn.textContent = 'Отправка...';
-        
-        const response = await fetch(`${API_URL}/games/${currentGame.id}/answer`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            userId: currentUser.id,
-            userName: currentUser.name,
-            answer: answer
-          })
-        });
-        
-        if (!response.ok) {
-          console.error(`Ошибка при отправке ответа, статус: ${response.status}`);
-          throw new Error(`Ошибка при отправке ответа: ${response.status}`);
-        }
-        
-        console.log('Ответ успешно отправлен');
-        
-        // Очищаем поле ввода
-        answerInput.value = '';
-        
-        showNotification('Ваш ответ принят!', 'success');
-        showScreen('roomScreen');
-        
-        // Обновляем информацию о комнате
-        checkGameStatus();
-      } catch (error) {
-        console.error('Ошибка при отправке ответа:', error);
-        showNotification('Не удалось отправить ответ. Попробуйте позже.', 'error');
-      } finally {
-        submitAnswerBtn.disabled = false;
-        submitAnswerBtn.textContent = 'Отправить ответ';
-      }
-    });
-  } else {
-    console.warn('Кнопка submitAnswerBtn не найдена');
+    submitAnswerBtn.addEventListener('click', submitAnswer);
   }
   
   // Кнопка отправки голосов
@@ -838,68 +790,65 @@ function initButtonHandlers() {
   if (answerButton) {
     console.log('Найдена кнопка answerButton');
     answerButton.addEventListener('click', function() {
-      console.log('Нажата кнопка "Ответить на вопрос" в комнате');
+      console.log('Нажата кнопка "Ответить на вопрос"');
       if (currentGame && currentGame.currentQuestion) {
-        console.log(`Переходим к ответу на вопрос: "${currentGame.currentQuestion}"`);
         showAnswerScreen(currentGame.currentQuestion);
       } else {
-        console.error('Ошибка: вопрос не найден');
-        showNotification('Ошибка: вопрос не найден', 'error');
+        showNotification('Ошибка загрузки вопроса', 'error');
       }
     });
-  } else {
-    console.warn('Кнопка answerButton не найдена');
   }
   
-  // Кнопка начала голосования
   const startVotingButton = document.getElementById('startVotingButton');
   if (startVotingButton) {
     console.log('Найдена кнопка startVotingButton');
     startVotingButton.addEventListener('click', function() {
       console.log('Нажата кнопка "Начать голосование"');
       if (currentGame && currentGame.id) {
-        console.log(`Запускаем голосование для игры ${currentGame.id}`);
         startVoting(currentGame.id);
       } else {
-        console.error('Ошибка: игра не найдена');
-        showNotification('Ошибка: игра не найдена', 'error');
+        showNotification('Ошибка: Данные игры не найдены', 'error');
       }
     });
-  } else {
-    console.warn('Кнопка startVotingButton не найдена');
   }
   
-  // Кнопка просмотра ответов
   const viewAnswersButton = document.getElementById('viewAnswersButton');
   if (viewAnswersButton) {
     console.log('Найдена кнопка viewAnswersButton');
     viewAnswersButton.addEventListener('click', function() {
       console.log('Нажата кнопка "Просмотр ответов"');
       if (currentGame && currentGame.id) {
-        console.log(`Загружаем варианты для голосования, игра ${currentGame.id}`);
-        loadVotingOptions(currentGame.id);
+        loadVotingOptions(currentGame.id)
+          .then(() => {
+            showScreen('votingScreen');
+          })
+          .catch(error => {
+            console.error('Ошибка при загрузке вариантов голосования:', error);
+            showNotification('Не удалось загрузить варианты ответов', 'error');
+          });
       } else {
-        console.error('Ошибка: игра не найдена');
-        showNotification('Ошибка: игра не найдена', 'error');
+        showNotification('Ошибка: Данные игры не найдены', 'error');
       }
     });
-  } else {
-    console.warn('Кнопка viewAnswersButton не найдена');
   }
   
-  // Кнопка выхода из комнаты
   const leaveRoomButton = document.getElementById('leaveRoomButton');
   if (leaveRoomButton) {
     console.log('Найдена кнопка leaveRoomButton');
     leaveRoomButton.addEventListener('click', function() {
       console.log('Нажата кнопка "Покинуть комнату"');
+      // Останавливаем обновление статуса комнаты
+      stopRoomUpdates();
+      
+      // Очищаем данные текущей игры
       currentGame = null;
-      console.log('Сбрасываем данные текущей игры, возвращаемся к списку игр');
+      
+      // Возвращаемся на экран выбора игры
       showScreen('gameScreen');
+      
+      // Обновляем список игр
       loadGames();
     });
-  } else {
-    console.warn('Кнопка leaveRoomButton не найдена');
   }
   
   // Добавим обработчики для оставшихся кнопок
@@ -1530,34 +1479,56 @@ function getStatusText(status) {
 
 // Функция для начала голосования (для создателя комнаты)
 async function startVoting(gameId) {
+  console.log(`Начало голосования для игры ${gameId}`);
+  
+  if (!currentUser || !currentUser.id) {
+    console.error('Нет данных о пользователе для начала голосования');
+    showNotification('Ошибка: Данные пользователя не найдены', 'error');
+    return;
+  }
+  
   try {
-    if (!currentGame.isCreator) {
-      showNotification('Только создатель может начать голосование', 'warning');
-      return;
-    }
+    showNotification('Запуск голосования...', 'info');
     
-    const response = await fetch(`${API_URL}/games/${gameId}/startVoting`, {
+    const response = await fetch(`${API_URL}/games/${gameId}/start-voting`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        userId: currentUser.id
+        creatorId: currentUser.id
       })
     });
     
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Не удалось начать голосование');
+      console.error(`Ошибка при запуске голосования, статус: ${response.status}`);
+      try {
+        const errorData = await response.json();
+        console.error('Данные ошибки:', errorData);
+        throw new Error(errorData.error || `Ошибка HTTP: ${response.status}`);
+      } catch (jsonError) {
+        console.error('Не удалось разобрать ответ как JSON:', jsonError);
+        throw new Error(`Ошибка HTTP: ${response.status}`);
+      }
     }
     
-    showNotification('Голосование успешно началось!', 'success');
+    const data = await response.json();
+    console.log('Голосование успешно запущено:', data);
     
-    // Обновляем страницу комнаты
-    joinGameRoom(gameId);
+    showNotification('Голосование запущено!', 'success');
+    
+    // Обновляем статус текущей игры
+    currentGame.status = 'voting';
+    
+    // Обновляем информацию о комнате
+    updateRoomInfo();
+    
+    // Загружаем варианты для голосования и переходим на экран голосования
+    await loadVotingOptions(gameId);
+    showScreen('votingScreen');
   } catch (error) {
     console.error('Ошибка при запуске голосования:', error);
-    showNotification(`Ошибка: ${error.message}`, 'error');
+    showNotification(`Не удалось запустить голосование: ${error.message}`, 'error');
   }
 }
 
@@ -2016,5 +1987,85 @@ async function testCreateGame() {
     console.error("Ошибка при тестировании создания игры:", error);
     showNotification(`Ошибка: ${error.message}`, "error");
     return false;
+  }
+}
+
+// Функция для отправки ответа
+async function submitAnswer() {
+  console.log('Отправка ответа...');
+  
+  const answerInput = document.getElementById('answerInput');
+  if (!answerInput || !answerInput.value.trim()) {
+    console.warn('Не введен ответ');
+    showNotification('Пожалуйста, введите ответ!', 'warning');
+    return;
+  }
+  
+  if (!currentGame || !currentGame.id) {
+    console.error('Нет данных о текущей игре');
+    showNotification('Ошибка: Данные игры не найдены', 'error');
+    return;
+  }
+  
+  try {
+    console.log(`Отправляем ответ для игры ${currentGame.id}`);
+    console.log('Данные запроса:', JSON.stringify({
+      userId: currentUser.id,
+      answer: answerInput.value.trim()
+    }));
+    
+    const response = await fetch(`${API_URL}/games/${currentGame.id}/answer`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userId: currentUser.id,
+        answer: answerInput.value.trim(),
+        anonymous: false
+      })
+    });
+    
+    if (!response.ok) {
+      console.error(`Ошибка при отправке ответа, статус: ${response.status}`);
+      try {
+        const errorData = await response.json();
+        console.error('Данные ошибки:', errorData);
+        throw new Error(errorData.error || `Ошибка HTTP: ${response.status}`);
+      } catch (jsonError) {
+        console.error('Не удалось разобрать ответ как JSON:', jsonError);
+        throw new Error(`Ошибка HTTP: ${response.status}`);
+      }
+    }
+    
+    const data = await response.json();
+    console.log('Ответ успешно отправлен:', data);
+    
+    showNotification('Ваш ответ принят!', 'success');
+    
+    // Обновляем отображение ответа пользователя
+    currentGame.userAnswer = answerInput.value.trim();
+    updateUserAnswerDisplay();
+    
+    // Очищаем поле ввода
+    answerInput.value = '';
+    
+    // Возвращаемся в комнату
+    showScreen('roomScreen');
+    
+    // Обновляем информацию о комнате
+    updateRoomInfo();
+  } catch (error) {
+    console.error('Ошибка при отправке ответа:', error);
+    showNotification(`Не удалось отправить ответ: ${error.message}`, 'error');
+  }
+}
+
+// Функция для остановки обновления статуса комнаты
+function stopRoomUpdates() {
+  if (window.roomUpdateInterval) {
+    console.log('Останавливаем обновление статуса комнаты');
+    clearInterval(window.roomUpdateInterval);
+    window.roomUpdateInterval = null;
   }
 }

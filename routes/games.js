@@ -318,4 +318,81 @@ router.get('/:gameId/check-answer', (req, res) => {
     }
 });
 
+// Присоединение к игре
+router.post('/:gameId/join', (req, res) => {
+    try {
+        const { gameId } = req.params;
+        const { userId, userName } = req.body;
+        
+        if (!userId || !userName) {
+            return res.status(400).json({ error: 'Требуется ID и имя пользователя' });
+        }
+        
+        console.log(`Пользователь ${userName} (${userId}) присоединяется к игре ${gameId}`);
+        
+        const game = gameLogic.getGame(gameId);
+        
+        if (!game) {
+            return res.status(404).json({ error: 'Игра не найдена' });
+        }
+        
+        // Добавляем пользователя в список участников, если его там еще нет
+        if (!game.participants.some(p => p.id === userId)) {
+            game.participants.push({ id: userId, name: userName });
+            
+            // Сохраняем изменения
+            gameLogic.writeGames();
+            
+            // Оповещаем всех участников о новом игроке
+            req.app.io.to(gameId).emit('playerJoined', {
+                gameId,
+                player: { id: userId, name: userName },
+                participants: game.participants
+            });
+        }
+        
+        // Дополнительная информация для клиента
+        const response = {
+            ...game,
+            isCreator: game.creator.id === userId,
+            answers: game.answers.length
+        };
+        
+        res.json(response);
+    } catch (error) {
+        console.error('Ошибка при присоединении к игре:', error);
+        res.status(500).json({ error: error.message || 'Ошибка сервера при присоединении к игре' });
+    }
+});
+
+// Получение ответа пользователя
+router.get('/:gameId/user-answer', (req, res) => {
+    try {
+        const { gameId } = req.params;
+        const { userId } = req.query;
+        
+        if (!userId) {
+            return res.status(400).json({ error: 'Требуется ID пользователя' });
+        }
+        
+        const game = gameLogic.getGame(gameId);
+        
+        if (!game) {
+            return res.status(404).json({ error: 'Игра не найдена' });
+        }
+        
+        // Ищем ответ пользователя
+        const userAnswer = game.answers.find(a => a.userId === userId);
+        
+        if (!userAnswer) {
+            return res.status(404).json({ error: 'Ответ не найден' });
+        }
+        
+        res.json({ answer: userAnswer.text });
+    } catch (error) {
+        console.error('Ошибка при получении ответа пользователя:', error);
+        res.status(500).json({ error: error.message || 'Ошибка сервера при получении ответа пользователя' });
+    }
+});
+
 module.exports = router; 
