@@ -68,17 +68,29 @@ router.get('/:gameId', (req, res) => {
         const { gameId } = req.params;
         const { userId } = req.query;
         
+        console.log(`Запрос информации о игре ${gameId} от пользователя ${userId}`);
+        
         const game = gameLogic.getGame(gameId);
         
         if (!game) {
             return res.status(404).json({ error: 'Игра не найдена' });
         }
         
-        // Дополнительная информация, является ли пользователь создателем
+        console.log('Найдена игра:', game);
+        
+        // Формируем полный ответ с информацией для клиента
         const response = { 
-            ...game,
-            isCreator: game.creator.id === userId
+            id: gameId,
+            status: game.status,
+            currentQuestion: game.currentQuestion,
+            creator: game.creator,
+            isCreator: userId && game.creator && game.creator.id === userId,
+            answers: game.answers.length,
+            participants: game.participants,
+            createdAt: game.createdAt
         };
+        
+        console.log('Отправляем ответ:', response);
         
         res.json(response);
     } catch (error) {

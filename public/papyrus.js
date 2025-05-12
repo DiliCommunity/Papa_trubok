@@ -1036,15 +1036,22 @@ function saveName() {
   
   const name = nameInput.value.trim();
   
-  // Сохраняем имя
+  // Проверяем, есть ли у пользователя ID, если нет - генерируем новый
+  if (!currentUser.id) {
+    currentUser.id = String(Date.now()) + Math.random().toString(36).substring(2, 8);
+  }
+  
+  console.log(`Сохраняем имя "${name}" для пользователя ${currentUser.id}`);
+  
+  // Сохраняем имя пользователя
   currentUser.name = name;
   currentUser.anonymous = false;
   
-  // Добавляем имя в список сохраненных
-  const savedNames = getSavedNames();
+  // Добавляем имя в список сохраненных для этого пользователя
+  const savedNames = getSavedNames(currentUser.id);
   if (!savedNames.includes(name)) {
     savedNames.push(name);
-    saveNamesToStorage(savedNames);
+    saveNamesToStorage(currentUser.id, savedNames);
   }
   
   // Обновляем имя в данных авторизации
@@ -1052,7 +1059,7 @@ function saveName() {
     const authData = localStorage.getItem('papaTrubokAuth');
     if (authData) {
       const parsedAuthData = JSON.parse(authData);
-      if (parsedAuthData) {
+      if (parsedAuthData && parsedAuthData.userId === currentUser.id) {
         parsedAuthData.name = name;
         localStorage.setItem('papaTrubokAuth', JSON.stringify(parsedAuthData));
         console.log('Обновлены данные авторизации с новым именем:', name);
@@ -1060,7 +1067,7 @@ function saveName() {
     } else {
       // Если нет данных авторизации, создаем новые
       const newAuthData = {
-        userId: currentUser.id || getTelegramUserId(),
+        userId: currentUser.id,
         name: name,
         method: 'manual',
         timestamp: Date.now()
@@ -1080,10 +1087,20 @@ function saveName() {
   loadGames();
 }
 
-// Функция для получения сохраненных имен из локального хранилища
-function getSavedNames() {
+// Функция для получения сохраненных имен конкретного пользователя
+function getSavedNames(userId) {
+  if (!userId && currentUser) {
+    userId = currentUser.id;
+  }
+  
+  if (!userId) {
+    console.warn('Не удалось определить ID пользователя для загрузки имен');
+    return [];
+  }
+  
   try {
-    const savedNamesJson = localStorage.getItem('papaTrubok_savedNames');
+    const savedNamesKey = `papaTrubok_savedNames_${userId}`;
+    const savedNamesJson = localStorage.getItem(savedNamesKey);
     if (savedNamesJson) {
       const savedNames = JSON.parse(savedNamesJson);
       if (Array.isArray(savedNames)) {
@@ -1097,31 +1114,25 @@ function getSavedNames() {
   return [];
 }
 
-// Функция для сохранения имен в локальное хранилище
-function saveNamesToStorage(names) {
+// Функция для сохранения имен в локальное хранилище для конкретного пользователя
+function saveNamesToStorage(userId, names) {
+  if (!userId && currentUser) {
+    userId = currentUser.id;
+  }
+  
+  if (!userId) {
+    console.warn('Не удалось определить ID пользователя для сохранения имен');
+    return false;
+  }
+  
   try {
-    localStorage.setItem('papaTrubok_savedNames', JSON.stringify(names));
+    const savedNamesKey = `papaTrubok_savedNames_${userId}`;
+    localStorage.setItem(savedNamesKey, JSON.stringify(names));
+    console.log(`Сохранено ${names.length} имен для пользователя ${userId}`);
+    return true;
   } catch (error) {
     console.error('Ошибка при сохранении имен:', error);
-  }
-}
-
-// Функция для отображения формы ввода нового имени
-function showNewNameForm() {
-  // Скрываем выбор опций и показываем форму ввода
-  const nameChoiceButtons = document.getElementById('nameChoiceButtons');
-  const newNameSection = document.getElementById('newNameSection');
-  
-  if (nameChoiceButtons) nameChoiceButtons.style.display = 'none';
-  if (newNameSection) {
-    newNameSection.style.display = 'block';
-    
-    // Фокусируемся на поле ввода
-    const nameInput = document.getElementById('nameInput');
-    if (nameInput) {
-      nameInput.value = '';
-      nameInput.focus();
-    }
+    return false;
   }
 }
 
@@ -1136,8 +1147,8 @@ function showExistingNames() {
   if (existingNameSection && savedNamesList) {
     existingNameSection.style.display = 'block';
     
-    // Получаем сохраненные имена
-    const savedNames = getSavedNames();
+    // Получаем сохраненные имена для текущего пользователя
+    const savedNames = getSavedNames(currentUser.id);
     
     // Если нет сохраненных имен
     if (savedNames.length === 0) {
@@ -1185,6 +1196,10 @@ function showExistingNames() {
 
 // Функция для выбора существующего имени
 function selectExistingName(name) {
+  if (!currentUser.id) {
+    currentUser.id = String(Date.now()) + Math.random().toString(36).substring(2, 8);
+  }
+  
   currentUser.name = name;
   currentUser.anonymous = false;
   
@@ -1193,10 +1208,18 @@ function selectExistingName(name) {
     const authData = localStorage.getItem('papaTrubokAuth');
     if (authData) {
       const parsedAuthData = JSON.parse(authData);
-      if (parsedAuthData) {
+      if (parsedAuthData && parsedAuthData.userId === currentUser.id) {
         parsedAuthData.name = name;
         localStorage.setItem('papaTrubokAuth', JSON.stringify(parsedAuthData));
       }
+    } else {
+      // Если нет данных авторизации, создаем новые
+      localStorage.setItem('papaTrubokAuth', JSON.stringify({
+        userId: currentUser.id,
+        name: name,
+        method: 'manual',
+        timestamp: Date.now()
+      }));
     }
   } catch (error) {
     console.error('Ошибка при обновлении имени в данных авторизации:', error);
@@ -1209,14 +1232,19 @@ function selectExistingName(name) {
 
 // Функция для удаления имени из списка сохраненных
 function deleteExistingName(name) {
-  // Получаем текущий список имен
-  const savedNames = getSavedNames();
+  if (!currentUser.id) {
+    showNotification('Ошибка: ID пользователя не определен', 'error');
+    return;
+  }
+  
+  // Получаем текущий список имен для данного пользователя
+  const savedNames = getSavedNames(currentUser.id);
   
   // Удаляем имя из списка
   const updatedNames = savedNames.filter(savedName => savedName !== name);
   
   // Сохраняем обновленный список
-  saveNamesToStorage(updatedNames);
+  saveNamesToStorage(currentUser.id, updatedNames);
   
   // Обновляем список отображаемых имен
   showExistingNames();
@@ -1338,11 +1366,11 @@ async function joinGameRoom(gameId) {
     // Сохраняем данные текущей игры
     currentGame = {
       id: gameId,
-      status: gameData.status,
+      status: gameData.status || 'collecting_answers',
       currentQuestion: gameData.currentQuestion || 'Вопрос не указан',
       isCreator: gameData.isCreator || false,
       creator: gameData.creator || { id: '', name: 'Неизвестно' },
-      answersCount: gameData.answers ? gameData.answers.length : 0,
+      answersCount: typeof gameData.answers === 'number' ? gameData.answers : 0,
       participants: gameData.participants || []
     };
     
@@ -1352,6 +1380,26 @@ async function joinGameRoom(gameId) {
     if (window.socket) {
       console.log('Присоединяемся к комнате через сокет');
       window.socket.emit('joinGame', gameId);
+    }
+    
+    // Проверяем, можем ли мы получить дополнительную информацию
+    try {
+      const detailsResponse = await fetch(`${API_URL}/games/${gameId}?userId=${currentUser.id}`);
+      if (detailsResponse.ok) {
+        const detailsData = await detailsResponse.json();
+        console.log('Получены детальные данные игры:', detailsData);
+        
+        // Обновляем информацию из детального запроса
+        if (detailsData.currentQuestion) currentGame.currentQuestion = detailsData.currentQuestion;
+        if (detailsData.creator) currentGame.creator = detailsData.creator;
+        if (typeof detailsData.answers === 'number') currentGame.answersCount = detailsData.answers;
+        if (detailsData.participants) currentGame.participants = detailsData.participants;
+        if (typeof detailsData.isCreator === 'boolean') currentGame.isCreator = detailsData.isCreator;
+        
+        console.log('Обновлены данные текущей игры:', currentGame);
+      }
+    } catch (detailsError) {
+      console.warn('Не удалось получить детальную информацию об игре:', detailsError);
     }
     
     // Показываем экран комнаты
@@ -1422,7 +1470,7 @@ function updateRoomInfo() {
   // Показываем информацию о создателе
   const roomCreator = document.getElementById('roomCreator');
   if (roomCreator) {
-    const creatorName = currentGame.creator ? currentGame.creator.name : 'Неизвестно';
+    const creatorName = currentGame.creator && currentGame.creator.name ? currentGame.creator.name : 'Неизвестно';
     roomCreator.textContent = creatorName;
   }
   
@@ -1461,6 +1509,12 @@ function updateRoomButtons() {
     // Если пользователь уже ответил, обновляем отображение его ответа
     if (hasAnswered) {
       updateUserAnswerDisplay();
+    }
+  }).catch(error => {
+    console.error('Ошибка при проверке ответа пользователя:', error);
+    // В случае ошибки показываем кнопку ответа по умолчанию
+    if (answerButton && currentGame.status === 'collecting_answers') {
+      answerButton.style.display = 'block';
     }
   });
   
