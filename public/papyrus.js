@@ -1,25 +1,80 @@
-// Базовый URL для API
-const API_URL = window.location.origin;
+// Глобальная инициализация API_URL
+let API_URL = '/api'; // По умолчанию API находится на том же домене
+let navigationHistory = []; // История навигации для кнопки "Назад"
+let keyboardVisible = false; // Флаг для отслеживания видимости клавиатуры
+
+// Глобальные переменные с начальными значениями
+let currentUser = null;
+let currentGame = null;
 
 console.log("papyrus.js загружен");
-console.log("API URL:", API_URL);
 
 // Функция тестирования соединения с сервером
 async function testServerConnection() {
   try {
-    console.log("Тестируем подключение к серверу...");
+    console.log('Тестирование соединения с сервером...');
     const response = await fetch(`${API_URL}/ping`);
-    const text = await response.text();
-    console.log(`Сервер ответил: ${text} (статус: ${response.status})`);
-    return response.ok;
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('Соединение с сервером установлено:', data);
+      return true;
+    } else {
+      console.error('Ошибка соединения с сервером:', response.status);
+      return false;
+    }
   } catch (error) {
-    console.error("Ошибка при подключении к серверу:", error);
+    console.error('Ошибка при проверке соединения:', error);
     return false;
   }
 }
 
-// Запускаем тест соединения при загрузке
-setTimeout(testServerConnection, 1000);
+// Инициализация приложения
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Загрузка приложения...');
+    
+    // Инициализируем API_URL в зависимости от окружения
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        // Для локальной разработки
+        const port = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
+        API_URL = `${window.location.protocol}//${window.location.hostname}:${port}/api`;
+    } else {
+        // Для продакшена
+        API_URL = '/api';
+    }
+    console.log('API_URL инициализирован:', API_URL);
+    
+    // Инициализируем данные пользователя
+    currentUser = {
+        id: getTelegramUserId(),
+        name: '',
+        anonymous: false // Всегда будет false
+    };
+    
+    // Проверяем соединение с сервером
+    testServerConnection();
+    
+    // Проверяем данные аутентификации
+    checkAuth();
+    
+    // Инициализируем обработчики кнопок
+    initButtonHandlers();
+    
+    // Проверяем, была ли последняя игра
+    checkLastGame();
+    
+    // Если в URL есть параметр gameId, пытаемся присоединиться к игре
+    const urlParams = new URLSearchParams(window.location.search);
+    const gameIdFromUrl = urlParams.get('gameId');
+    if (gameIdFromUrl) {
+        console.log('Найден gameId в URL:', gameIdFromUrl);
+        currentGame = { id: gameIdFromUrl };
+        joinGameRoom(gameIdFromUrl);
+    } else {
+        // Иначе загружаем список игр
+        loadGames();
+    }
+});
 
 // Функция проверки авторизации
 function checkAuth() {
@@ -90,16 +145,6 @@ if (!window.Telegram || !window.Telegram.WebApp) {
 } else {
   console.log("Telegram WebApp обнаружен, используем встроенные функции");
 }
-
-// Глобальные переменные
-let currentUser = {
-  id: getTelegramUserId(),
-  name: '',
-  anonymous: false // Всегда будет false
-};
-let currentGame = null;
-let navigationHistory = []; // История навигации для кнопки "Назад"
-let keyboardVisible = false; // Флаг для отслеживания видимости клавиатуры
 
 // Использование Telegram ID пользователя
 function getTelegramUserId() {
@@ -577,7 +622,7 @@ function initButtonHandlers() {
       try {
         // Проверяем, есть ли данные о пользователе
         if (!currentUser || !currentUser.id || !currentUser.name) {
-          console.error('Нет данных о пользователе');
+          console.error('Нет данных о пользователе', currentUser);
           showNotification('Пожалуйста, введите ваше имя!', 'warning');
           showScreen('nameScreen');
           return;
@@ -587,18 +632,23 @@ function initButtonHandlers() {
         const question = questionInput.value.trim();
         const creatorName = currentUser.name || 'Анонимный';
         
-        console.log(`Создаем игру с вопросом: "${question}", создатель: ${creatorName}`);
+        console.log(`Создаем игру с вопросом: "${question}", создатель: ${creatorName} (ID: ${currentUser.id})`);
         
         // Отправляем запрос на создание игры
         submitQuestionBtn.disabled = true;
         submitQuestionBtn.textContent = 'Создание...';
         
-        console.log('Отправляем запрос на создание игры...');
-        console.log('Данные запроса:', JSON.stringify({
+        // Отладочный вывод для диагностики
+        console.log('API_URL:', API_URL);
+        
+        const requestData = {
           question: question,
           userId: currentUser.id,
           userName: creatorName
-        }));
+        };
+        
+        console.log('Отправляем запрос на создание игры...');
+        console.log('Данные запроса:', JSON.stringify(requestData));
         
         try {
           const response = await fetch(`${API_URL}/games`, {
@@ -606,11 +656,7 @@ function initButtonHandlers() {
             headers: {
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-              question: question,
-              userId: currentUser.id,
-              userName: creatorName
-            })
+            body: JSON.stringify(requestData)
           });
           
           console.log('Получен ответ от сервера:', response.status);
@@ -623,7 +669,7 @@ function initButtonHandlers() {
           }
           
           const game = await response.json();
-          console.log('Игра успешно создана:', game);
+          console.log('Игра успешно создана, ответ сервера:', game);
           
           // Очищаем поле ввода
           questionInput.value = '';
@@ -636,12 +682,15 @@ function initButtonHandlers() {
             currentQuestion: question
           };
           
-          console.log('Переходим в комнату игры с ID:', currentGame.id);
+          console.log('Данные игры для перехода:', currentGame);
+          
           // Показываем уведомление о создании игры
           showNotification('Игра успешно создана!', 'success');
+          
           // Иногда сервер может возвращать id вместо gameId, проверяем оба варианта
           const gameId = game.gameId || game.id;
           if (gameId) {
+            console.log('Переходим в игру с ID:', gameId);
             joinGameRoom(gameId);
           } else {
             console.error('Не удалось получить ID созданной игры');

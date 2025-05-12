@@ -31,6 +31,20 @@ class GameLogic {
         return game;
     }
 
+    addGame(game) {
+        if (!game || !game.id) {
+            throw new Error('Некорректные данные игры');
+        }
+        this.games.set(game.id, game);
+        return game;
+    }
+
+    writeGames() {
+        console.log('Сохраняем игры в JSON файл...');
+        // Здесь должен быть код для сохранения в файл
+        return true;
+    }
+
     joinGame(gameId, userId, userName) {
         const game = this.games.get(gameId);
         if (!game) {

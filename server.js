@@ -25,6 +25,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Делаем io доступным для маршрутизаторов
 app.io = io;
 
+// Маршрут для проверки работоспособности сервера
+app.get('/api/ping', (req, res) => {
+  console.log('Получен запрос на /api/ping');
+  res.json({ status: 'ok', message: 'Сервер работает', timestamp: new Date().toISOString() });
+});
+
 // Импортируем маршрутизаторы
 app.use('/api/games', gamesRouter);
 
