@@ -377,6 +377,9 @@ function goBack() {
     // Если истории нет, возвращаемся на начальный экран вместо выхода из приложения
     showScreen('startScreen');
   }
+  
+  // Добавляем новое состояние в историю браузера для предотвращения выхода из приложения
+  window.history.pushState({ page: Date.now() }, "", window.location.href);
 }
 
 // Обработчик для начала приложения
@@ -529,7 +532,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Важно: добавляем новое состояние в историю, чтобы браузер не закрыл приложение
-    window.history.pushState({page: 1}, "Папа Трубок", null);
+    window.history.pushState({page: Date.now()}, "Папа Трубок", null);
     return false;
   });
   
@@ -551,6 +554,38 @@ document.addEventListener('DOMContentLoaded', function() {
         goBack();
       });
     }
+  }
+  
+  // Добавляем блокировку hardware back button на Android
+  document.addEventListener('backbutton', function(e) {
+    console.log('Аппаратная кнопка "Назад" перехвачена');
+    e.preventDefault();
+    goBack();
+    return false;
+  }, false);
+});
+
+// Добавляем также обработку перед закрытием страницы
+window.addEventListener('beforeunload', function(e) {
+  // Отменяем стандартное поведение только если мы не на стартовом экране
+  let currentScreenId = null;
+  const screens = [
+    'startScreen', 'nameScreen', 'gameScreen', 'questionScreen',
+    'answerScreen', 'votingScreen', 'resultsScreen', 'roomScreen'
+  ];
+  
+  for (const id of screens) {
+    const screen = document.getElementById(id);
+    if (screen && screen.style.display === 'block') {
+      currentScreenId = id;
+      break;
+    }
+  }
+  
+  if (currentScreenId && currentScreenId !== 'startScreen') {
+    e.preventDefault();
+    e.returnValue = '';
+    return '';
   }
 });
 
@@ -732,6 +767,7 @@ function initButtonHandlers() {
         console.log('Отправляем запрос на создание игры...');
         console.log('Данные запроса:', JSON.stringify(requestData));
         
+        // Добавляем обработку ошибок сети и блокировку повторных нажатий
         try {
           const response = await fetch(`${API_URL}/games`, {
             method: 'POST',
@@ -787,11 +823,13 @@ function initButtonHandlers() {
           if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
             showNotification('Проблема с сетью. Попробуйте позже или используйте тестовое создание игры.', 'warning');
           }
+        } finally {
+          submitQuestionBtn.disabled = false;
+          submitQuestionBtn.textContent = 'Создать игру';
         }
       } catch (error) {
         console.error('Ошибка при создании игры:', error);
         showNotification('Не удалось создать игру. Попробуйте позже.', 'error');
-      } finally {
         submitQuestionBtn.disabled = false;
         submitQuestionBtn.textContent = 'Создать игру';
       }
@@ -968,13 +1006,20 @@ function showNameChoiceOptions() {
   // Показываем главные кнопки выбора
   const choiceButtons = document.getElementById('nameChoiceButtons');
   if (choiceButtons) {
+    // Проверяем, есть ли ID пользователя, если нет - генерируем новый
+    if (!currentUser || !currentUser.id) {
+      currentUser = currentUser || {};
+      currentUser.id = String(Date.now()) + Math.random().toString(36).substring(2, 8);
+      console.log('Сгенерирован новый ID пользователя:', currentUser.id);
+    }
+    
     // Получаем имя из данных авторизации
     let authName = '';
     try {
       const authData = localStorage.getItem('papaTrubokAuth');
       if (authData) {
         const parsedAuthData = JSON.parse(authData);
-        if (parsedAuthData && parsedAuthData.name) {
+        if (parsedAuthData && parsedAuthData.name && parsedAuthData.userId === currentUser.id) {
           authName = parsedAuthData.name;
         }
       }
@@ -1023,7 +1068,16 @@ function showNameChoiceOptions() {
           if (authData) {
             const parsedAuthData = JSON.parse(authData);
             parsedAuthData.name = telegramName;
+            parsedAuthData.userId = currentUser.id;
             localStorage.setItem('papaTrubokAuth', JSON.stringify(parsedAuthData));
+          } else {
+            // Если данных авторизации нет, создаем новые
+            localStorage.setItem('papaTrubokAuth', JSON.stringify({
+              userId: currentUser.id,
+              name: telegramName,
+              method: 'telegram',
+              timestamp: Date.now()
+            }));
           }
         } catch (error) {
           console.error('Ошибка при обновлении имени в данных авторизации:', error);
@@ -1043,14 +1097,17 @@ function showNameChoiceOptions() {
     newNameBtn.addEventListener('click', showNewNameForm);
     choiceButtons.appendChild(newNameBtn);
     
-    // Кнопка "Использовать сохраненное имя"
+    // Получаем сохраненные имена для текущего пользователя
+    const savedNames = getSavedNames(currentUser.id);
+    console.log(`Найдено ${savedNames.length} сохраненных имен для пользователя ${currentUser.id}`);
+    
+    // Кнопка "Использовать сохраненное имя" - активна только если есть сохраненные имена
     const existingNameBtn = document.createElement('button');
     existingNameBtn.className = 'papyrus-button shimmer';
     existingNameBtn.textContent = 'Использовать сохранённое имя';
     existingNameBtn.addEventListener('click', showExistingNames);
     
     // Проверяем наличие сохраненных имен
-    const savedNames = getSavedNames();
     if (savedNames.length === 0) {
       existingNameBtn.classList.add('disabled');
       existingNameBtn.disabled = true;
@@ -1059,6 +1116,29 @@ function showNameChoiceOptions() {
     
     choiceButtons.appendChild(existingNameBtn);
     choiceButtons.style.display = 'block';
+  }
+}
+
+// Функция для показа формы ввода нового имени (нужно добавить в код)
+function showNewNameForm() {
+  // Скрываем кнопки выбора
+  const choiceButtons = document.getElementById('nameChoiceButtons');
+  if (choiceButtons) {
+    choiceButtons.style.display = 'none';
+  }
+  
+  // Показываем форму ввода нового имени
+  const newNameSection = document.getElementById('newNameSection');
+  if (newNameSection) {
+    newNameSection.style.display = 'block';
+    
+    // Очищаем поле ввода
+    const nameInput = document.getElementById('nameInput');
+    if (nameInput) {
+      nameInput.value = '';
+      // Устанавливаем фокус на поле ввода
+      setTimeout(() => nameInput.focus(), 100);
+    }
   }
 }
 
@@ -2210,12 +2290,20 @@ async function submitAnswer() {
     showNotification('Ошибка: Данные игры не найдены', 'error');
     return;
   }
+
+  // Блокируем кнопку отправки ответа
+  const submitAnswerBtn = document.getElementById('submitAnswerBtn');
+  if (submitAnswerBtn) {
+    submitAnswerBtn.disabled = true;
+    submitAnswerBtn.textContent = 'Отправка...';
+  }
   
   try {
     console.log(`Отправляем ответ для игры ${currentGame.id}`);
     console.log('Данные запроса:', JSON.stringify({
       userId: currentUser.id,
-      answer: answerInput.value.trim()
+      answer: answerInput.value.trim(),
+      anonymous: false
     }));
     
     const response = await fetch(`${API_URL}/games/${currentGame.id}/answer`, {
@@ -2247,9 +2335,8 @@ async function submitAnswer() {
     
     showNotification('Ваш ответ принят!', 'success');
     
-    // Обновляем отображение ответа пользователя
+    // Сохраняем ответ в объекте текущей игры
     currentGame.userAnswer = answerInput.value.trim();
-    updateUserAnswerDisplay();
     
     // Очищаем поле ввода
     answerInput.value = '';
@@ -2257,11 +2344,26 @@ async function submitAnswer() {
     // Возвращаемся в комнату
     showScreen('roomScreen');
     
-    // Обновляем информацию о комнате
-    updateRoomInfo();
+    // Делаем небольшую задержку перед обновлением интерфейса комнаты
+    setTimeout(() => {
+      // Обновляем информацию о комнате
+      updateRoomInfo();
+      
+      // Принудительно обновляем отображение ответа пользователя
+      updateUserAnswerDisplay();
+      
+      // Обновляем статус кнопок
+      updateRoomButtons();
+    }, 500);
   } catch (error) {
     console.error('Ошибка при отправке ответа:', error);
     showNotification(`Не удалось отправить ответ: ${error.message}`, 'error');
+  } finally {
+    // Разблокируем кнопку отправки ответа
+    if (submitAnswerBtn) {
+      submitAnswerBtn.disabled = false;
+      submitAnswerBtn.textContent = 'Отправить ответ';
+    }
   }
 }
 
