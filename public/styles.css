@@ -503,4 +503,24 @@ h1 {
 
 .back-button:hover {
     background: #555;
+}
+
+/* Стили для кнопки выбора ника из Telegram */
+.telegram-button {
+    background: linear-gradient(45deg, #0088cc, #00a8ff);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.telegram-button:before {
+    content: "📱";
+    margin-right: 8px;
+    font-size: 1.2em;
+}
+
+.telegram-button:hover {
+    background: linear-gradient(45deg, #007bb8, #0095e6);
 } 

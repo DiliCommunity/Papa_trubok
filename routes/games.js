@@ -363,12 +363,19 @@ router.post('/:gameId/join', (req, res) => {
             });
         }
         
-        // Дополнительная информация для клиента
+        // Формируем полный ответ для клиента
         const response = {
-            ...game,
-            isCreator: game.creator.id === userId,
-            answers: game.answers.length
+            id: gameId,
+            status: game.status,
+            currentQuestion: game.currentQuestion,
+            creator: game.creator,
+            isCreator: game.creator && game.creator.id === userId,
+            participants: game.participants,
+            answers: game.answers ? game.answers.length : 0,
+            createdAt: game.createdAt
         };
+        
+        console.log('Отправляем полную информацию о комнате:', response);
         
         res.json(response);
     } catch (error) {

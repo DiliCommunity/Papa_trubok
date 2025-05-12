@@ -1000,6 +1000,42 @@ function showNameChoiceOptions() {
       choiceButtons.appendChild(authNameBtn);
     }
     
+    // Добавляем кнопку использования ника из Telegram, если он доступен
+    const telegramName = getTelegramUserName();
+    if (telegramName && (!authName || telegramName !== authName)) {
+      const telegramNameBtn = document.createElement('button');
+      telegramNameBtn.className = 'papyrus-button shimmer telegram-button';
+      telegramNameBtn.textContent = `Использовать ник из Telegram: ${telegramName}`;
+      telegramNameBtn.addEventListener('click', function() {
+        currentUser.name = telegramName;
+        currentUser.anonymous = false;
+        
+        // Сохраняем в список имен для этого пользователя
+        const savedNames = getSavedNames(currentUser.id);
+        if (!savedNames.includes(telegramName)) {
+          savedNames.push(telegramName);
+          saveNamesToStorage(currentUser.id, savedNames);
+        }
+        
+        // Обновляем данные авторизации
+        try {
+          const authData = localStorage.getItem('papaTrubokAuth');
+          if (authData) {
+            const parsedAuthData = JSON.parse(authData);
+            parsedAuthData.name = telegramName;
+            localStorage.setItem('papaTrubokAuth', JSON.stringify(parsedAuthData));
+          }
+        } catch (error) {
+          console.error('Ошибка при обновлении имени в данных авторизации:', error);
+        }
+        
+        showScreen('gameScreen');
+        showNotification(`Используем ник из Telegram: ${telegramName}`, 'success');
+        loadGames();
+      });
+      choiceButtons.appendChild(telegramNameBtn);
+    }
+    
     // Кнопка "Придумать другое имя"
     const newNameBtn = document.createElement('button');
     newNameBtn.className = 'papyrus-button shimmer';
@@ -1341,6 +1377,17 @@ async function joinGameRoom(gameId) {
       userName: currentUser.name
     }));
     
+    // Сначала получаем информацию о комнате
+    const infoResponse = await fetch(`${API_URL}/games/${gameId}?userId=${currentUser.id}`);
+    
+    if (!infoResponse.ok) {
+      console.error(`Ошибка при получении информации о комнате, статус: ${infoResponse.status}`);
+      throw new Error(`Ошибка при получении информации о комнате: ${infoResponse.status}`);
+    }
+    
+    const roomInfo = await infoResponse.json();
+    console.log('Получена информация о комнате:', roomInfo);
+    
     // Отправляем запрос на присоединение к комнате
     const response = await fetch(`${API_URL}/games/${gameId}/join`, {
       method: 'POST',
@@ -1363,15 +1410,21 @@ async function joinGameRoom(gameId) {
     const gameData = await response.json();
     console.log('Данные игры после присоединения:', gameData);
     
+    // Объединяем данные из обоих запросов
+    const combinedData = {
+      ...roomInfo,
+      ...gameData
+    };
+    
     // Сохраняем данные текущей игры
     currentGame = {
       id: gameId,
-      status: gameData.status || 'collecting_answers',
-      currentQuestion: gameData.currentQuestion || 'Вопрос не указан',
-      isCreator: gameData.isCreator || false,
-      creator: gameData.creator || { id: '', name: 'Неизвестно' },
-      answersCount: typeof gameData.answers === 'number' ? gameData.answers : 0,
-      participants: gameData.participants || []
+      status: combinedData.status || 'collecting_answers',
+      currentQuestion: combinedData.currentQuestion || 'Вопрос не указан',
+      isCreator: combinedData.isCreator || false,
+      creator: combinedData.creator || { id: '', name: 'Неизвестно' },
+      answersCount: typeof combinedData.answers === 'number' ? combinedData.answers : (combinedData.answers ? combinedData.answers.length : 0),
+      participants: combinedData.participants || []
     };
     
     console.log('Текущая игра установлена:', currentGame);
@@ -1380,26 +1433,6 @@ async function joinGameRoom(gameId) {
     if (window.socket) {
       console.log('Присоединяемся к комнате через сокет');
       window.socket.emit('joinGame', gameId);
-    }
-    
-    // Проверяем, можем ли мы получить дополнительную информацию
-    try {
-      const detailsResponse = await fetch(`${API_URL}/games/${gameId}?userId=${currentUser.id}`);
-      if (detailsResponse.ok) {
-        const detailsData = await detailsResponse.json();
-        console.log('Получены детальные данные игры:', detailsData);
-        
-        // Обновляем информацию из детального запроса
-        if (detailsData.currentQuestion) currentGame.currentQuestion = detailsData.currentQuestion;
-        if (detailsData.creator) currentGame.creator = detailsData.creator;
-        if (typeof detailsData.answers === 'number') currentGame.answersCount = detailsData.answers;
-        if (detailsData.participants) currentGame.participants = detailsData.participants;
-        if (typeof detailsData.isCreator === 'boolean') currentGame.isCreator = detailsData.isCreator;
-        
-        console.log('Обновлены данные текущей игры:', currentGame);
-      }
-    } catch (detailsError) {
-      console.warn('Не удалось получить детальную информацию об игре:', detailsError);
     }
     
     // Показываем экран комнаты
@@ -1470,8 +1503,67 @@ function updateRoomInfo() {
   // Показываем информацию о создателе
   const roomCreator = document.getElementById('roomCreator');
   if (roomCreator) {
-    const creatorName = currentGame.creator && currentGame.creator.name ? currentGame.creator.name : 'Неизвестно';
+    let creatorName = 'Неизвестно';
+    if (currentGame.creator) {
+      if (typeof currentGame.creator === 'object' && currentGame.creator.name) {
+        creatorName = currentGame.creator.name;
+      } else if (typeof currentGame.creator === 'string') {
+        creatorName = currentGame.creator;
+      }
+    }
     roomCreator.textContent = creatorName;
+  }
+  
+  // Дополнительный запрос для обновления информации о комнате, если данные неполные
+  if (!currentGame.creator || !currentGame.currentQuestion) {
+    console.log('Не все данные о комнате доступны, запрашиваем дополнительную информацию');
+    
+    fetch(`${API_URL}/games/${currentGame.id}?userId=${currentUser.id}`)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Ошибка при получении дополнительной информации: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        console.log('Получены дополнительные данные о комнате:', data);
+        
+        // Обновляем данные
+        if (data.currentQuestion) {
+          currentGame.currentQuestion = data.currentQuestion;
+          if (roomQuestion) roomQuestion.textContent = data.currentQuestion;
+        }
+        
+        if (data.creator) {
+          currentGame.creator = data.creator;
+          if (roomCreator) {
+            let creatorName = 'Неизвестно';
+            if (data.creator) {
+              if (typeof data.creator === 'object' && data.creator.name) {
+                creatorName = data.creator.name;
+              } else if (typeof data.creator === 'string') {
+                creatorName = data.creator;
+              }
+            }
+            roomCreator.textContent = creatorName;
+          }
+        }
+        
+        if (typeof data.answers === 'number' || (data.answers && data.answers.length)) {
+          const answersCount = typeof data.answers === 'number' ? data.answers : data.answers.length;
+          currentGame.answersCount = answersCount;
+          if (roomAnswersCount) roomAnswersCount.textContent = answersCount;
+        }
+        
+        if (data.participants) {
+          currentGame.participants = data.participants;
+        }
+        
+        console.log('Данные комнаты обновлены:', currentGame);
+      })
+      .catch(error => {
+        console.error('Ошибка при получении дополнительной информации о комнате:', error);
+      });
   }
   
   // Управляем кнопками в комнате
