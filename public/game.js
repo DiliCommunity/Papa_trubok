@@ -60,7 +60,7 @@ function renderGameActions(game) {
         // Кнопка ответить на вопрос
         const hasAnswered = game.answers.some(a => a.userId === currentUser.id);
         actions.innerHTML = `
-            <button id="answerButton" class="papyrus-button shimmer" ${hasAnswered ? 'disabled' : ''}>${hasAnswered ? 'Ответ принят' : 'Ответить на вопрос'}</button>
+            <button id="answerButton" class="papyrus-button shimmer${hasAnswered ? ' success' : ''}" ${hasAnswered ? 'disabled' : ''}>${hasAnswered ? 'Ответ получен!' : 'Ответить на вопрос'}</button>
             ${game.isCreator && (game.answers.length >= 3) ? '<button id="startVotingButton" class="papyrus-button shimmer">Начать голосование</button>' : ''}
         `;
         document.getElementById('answerButton').onclick = function() {
@@ -118,7 +118,18 @@ async function submitAnswer() {
         });
         if (!res.ok) throw new Error('Ошибка');
         showNotification('Ответ сохранён!', 'success');
-        loadMyGame();
+        // После успешного ответа — обновляем интерфейс
+        renderGameActions({
+            ...currentGame,
+            answers: [...(currentGame.answers || []), {userId: currentUser.id, answer}]
+        });
+        // Визуально подсвечиваем кнопку зелёным
+        const answerButton = document.getElementById('answerButton');
+        if (answerButton) {
+            answerButton.classList.add('success');
+            answerButton.textContent = 'Ответ получен!';
+            answerButton.disabled = true;
+        }
     } catch {
         showNotification('Ошибка при отправке ответа', 'error');
     }
