@@ -1,62 +1,57 @@
 // room_updates.js - Функции для обновления состояния комнаты в реальном времени
 
-// Интервал обновления состояния комнаты (в миллисекундах)
-const ROOM_UPDATE_INTERVAL = 5000; // 5 секунд
-
-// Идентификатор интервала обновления
+// Интервал для обновления информации о комнате
 let roomUpdateInterval = null;
 
-// Функция для запуска периодического обновления состояния комнаты
+// Константы
+const UPDATE_INTERVAL = 5000; // 5 секунд
+
+// Глобальная переменная для API_URL
+let API_URL = '';
+
+// Функция для запуска периодического обновления комнаты
 function startRoomUpdates(gameId) {
-    console.log(`Запуск обновления для комнаты ${gameId}`);
+    console.log(`Запуск обновлений комнаты ${gameId}`);
     
-    // Сначала останавливаем предыдущие обновления, если были
+    // Получаем API_URL из глобального объекта window или используем пустую строку
+    API_URL = window.API_URL || '';
+    console.log(`В room_updates.js используется API_URL: ${API_URL}`);
+    
+    // Останавливаем предыдущие обновления, если они были
     if (roomUpdateInterval) {
         clearInterval(roomUpdateInterval);
     }
     
-    // Выполняем первое обновление немедленно
+    // Инициируем первое обновление
     updateRoomStatus(gameId);
     
-    // Затем настраиваем периодические обновления
-    roomUpdateInterval = setInterval(() => {
-        updateRoomStatus(gameId);
-    }, ROOM_UPDATE_INTERVAL);
+    // Устанавливаем интервал обновления
+    roomUpdateInterval = setInterval(() => updateRoomStatus(gameId), UPDATE_INTERVAL);
 }
 
-// Функция для остановки периодического обновления состояния комнаты
+// Функция остановки обновлений
 function stopRoomUpdates() {
+    console.log('Остановка обновлений комнаты');
     if (roomUpdateInterval) {
         clearInterval(roomUpdateInterval);
         roomUpdateInterval = null;
-        console.log('Обновления комнаты остановлены');
     }
 }
 
-// Функция для обновления состояния комнаты
+// Функция для обновления статуса комнаты
 async function updateRoomStatus(gameId) {
-    if (!gameId) {
-        console.error('Не указан ID игры для обновления');
-        return;
-    }
-    
     try {
-        console.log(`Обновление статуса комнаты ${gameId}...`);
+        console.log(`Обновление статуса комнаты ${gameId}`);
         
-        const response = await fetch(`${API_URL}/games/${gameId}?_=${Date.now()}`);
+        // Делаем запрос на сервер для получения актуальной информации о комнате
+        const response = await fetch(`${API_URL}/api/games/${gameId}?userId=${window.currentUser.id}`);
+        
         if (!response.ok) {
-            throw new Error(`Ошибка HTTP: ${response.status}`);
+            throw new Error(`HTTP ошибка: ${response.status}`);
         }
         
         const gameData = await response.json();
-        console.log('Получены данные игры:', gameData);
-        
-        // Если текущая игра не установлена, инициализируем её
-        if (!window.currentGame) {
-            window.currentGame = {
-                id: gameId
-            };
-        }
+        console.log('Получены данные о комнате:', gameData);
         
         // Проверяем изменение статуса
         const statusChanged = window.currentGame.status !== gameData.status;
@@ -214,7 +209,7 @@ async function updateRoomButtons(gameData) {
         if (hasAnswered) {
             try {
                 // Получаем ответ пользователя
-                const userAnswerResponse = await fetch(`${API_URL}/games/${gameData.id}/user-answer?userId=${currentUser.id}`);
+                const userAnswerResponse = await fetch(`${API_URL}/api/games/${gameData.id}/user-answer?userId=${window.currentUser.id}`);
                 if (userAnswerResponse.ok) {
                     const userAnswerData = await userAnswerResponse.json();
                     window.currentGame.userAnswer = userAnswerData.answer;
@@ -240,7 +235,7 @@ async function updateRoomButtons(gameData) {
 // Проверка, ответил ли пользователь на вопрос
 async function checkIfAlreadyAnswered(gameId) {
     try {
-        const response = await fetch(`${API_URL}/games/${gameId}/check-answer?userId=${currentUser.id}`);
+        const response = await fetch(`${API_URL}/api/games/${gameId}/check-answer?userId=${window.currentUser.id}`);
         if (!response.ok) {
             return false;
         }

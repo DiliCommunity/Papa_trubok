@@ -37,93 +37,55 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
         // Для локальной разработки
         const port = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
-        API_URL = `${window.location.protocol}//${window.location.hostname}:${port}/api`;
+        API_URL = `${window.location.protocol}//${window.location.hostname}:${port}`;
     } else {
         // Для продакшена
-        API_URL = '/api';
+        API_URL = '';
     }
     console.log('API_URL инициализирован:', API_URL);
     
+    // Делаем API_URL доступным глобально
+    window.API_URL = API_URL;
+    
     // Инициализируем данные пользователя, используя Telegram ID если доступен
     const telegramId = getTelegramUserId();
+    
+    // Если есть Telegram ID, используем его, иначе создаем временного пользователя
     if (telegramId) {
+        console.log(`Обнаружен пользователь Telegram с ID: ${telegramId}`);
         currentUser = {
             id: telegramId,
-            name: getTelegramUserName() || '',
+            name: getTelegramUserName() || 'Пользователь Telegram',
             anonymous: false
         };
         
-        // Сохраняем Telegram данные в локальное хранилище, если их там еще нет
-        try {
-            const authData = localStorage.getItem('papaTrubokAuth');
-            if (!authData) {
-                const newAuthData = {
-                    userId: telegramId,
-                    name: currentUser.name,
-                    method: 'telegram',
-                    timestamp: Date.now()
-                };
-                localStorage.setItem('papaTrubokAuth', JSON.stringify(newAuthData));
-                console.log('Сохранены данные авторизации из Telegram:', newAuthData);
-            }
-        } catch (error) {
-            console.error('Ошибка при сохранении данных Telegram:', error);
-        }
+        console.log('Данные пользователя из Telegram:', currentUser);
     } else {
-        // Проверяем наличие сохраненных данных
-        const authData = localStorage.getItem('papaTrubokAuth');
-        if (authData) {
-            try {
-                const parsedAuthData = JSON.parse(authData);
-                currentUser = {
-                    id: parsedAuthData.userId,
-                    name: parsedAuthData.name || '',
-                    anonymous: false
-                };
-                console.log('Загружены данные пользователя из хранилища:', currentUser);
-            } catch (error) {
-                console.error('Ошибка при загрузке данных пользователя:', error);
-                currentUser = { 
-                    id: String(Date.now()) + Math.random().toString(36).substring(2, 8), 
-                    name: '', 
-                    anonymous: false 
-                };
-            }
-        } else {
-            // Создаем нового пользователя с уникальным ID
-            currentUser = { 
-                id: String(Date.now()) + Math.random().toString(36).substring(2, 8), 
-                name: '', 
-                anonymous: false 
-            };
-        }
+        // Для отладки создаем тестового пользователя
+        // В реальной версии это должен быть идентификатор сессии или другой механизм
+        const randomId = 'user_' + Math.floor(Math.random() * 1000000);
+        currentUser = {
+            id: randomId,
+            name: 'Гость_' + randomId.substr(-4),
+            anonymous: false
+        };
+        
+        console.log('Создан временный пользователь:', currentUser);
     }
     
-    console.log('Инициализирован пользователь:', currentUser);
+    // Делаем текущего пользователя доступным глобально
+    window.currentUser = currentUser;
     
-    // Проверяем соединение с сервером
-    testServerConnection();
-    
-    // Проверяем данные аутентификации
-    checkAuth();
-    
-    // Инициализируем обработчики кнопок
+    // Инициализируем обработчики кнопок и событий
     initButtonHandlers();
     
-    // Проверяем, была ли последняя игра
+    // Показываем стартовый экран
+    showScreen('startScreen');
+    
+    // Проверяем, была ли предыдущая игра
     checkLastGame();
     
-    // Если в URL есть параметр gameId, пытаемся присоединиться к игре
-    const urlParams = new URLSearchParams(window.location.search);
-    const gameIdFromUrl = urlParams.get('gameId');
-    if (gameIdFromUrl) {
-        console.log('Найден gameId в URL:', gameIdFromUrl);
-        currentGame = { id: gameIdFromUrl };
-        joinGameRoom(gameIdFromUrl);
-    } else {
-        // Иначе загружаем список игр
-        loadGames();
-    }
+    console.log('Инициализация приложения завершена!');
 });
 
 // Функция проверки авторизации
@@ -1705,7 +1667,8 @@ async function updateUserAnswerDisplay() {
   
   try {
     console.log(`Запрашиваем ответ пользователя ${currentUser.id} для игры ${currentGame.id}`);
-    const response = await fetch(`${API_URL}/games/${currentGame.id}/user-answer?userId=${currentUser.id}`);
+    const apiUrl = window.API_URL || '';
+    const response = await fetch(`${apiUrl}/api/games/${currentGame.id}/user-answer?userId=${currentUser.id}`);
     
     if (!response.ok) {
       throw new Error(`Ошибка при получении ответа пользователя: ${response.status}`);
@@ -1739,6 +1702,9 @@ async function updateUserAnswerDisplay() {
   }
 }
 
+// Экспортируем функцию в глобальную область видимости
+window.updateUserAnswerDisplay = updateUserAnswerDisplay;
+
 // Функция для получения текстового описания статуса игры
 function getStatusText(status) {
   switch (status) {
@@ -1766,7 +1732,8 @@ async function startVoting(gameId) {
   try {
     showNotification('Запуск голосования...', 'info');
     
-    const response = await fetch(`${API_URL}/games/${gameId}/start-voting`, {
+    const apiUrl = window.API_URL || '';
+    const response = await fetch(`${apiUrl}/api/games/${gameId}/start-voting`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -2144,16 +2111,20 @@ async function checkGameStatus() {
 // Добавим функцию для проверки было ли уже отвечено на вопрос
 async function checkIfAnswered(gameId) {
   try {
-    const response = await fetch(`${API_URL}/games/${gameId}/check-answer?userId=${currentUser.id}`);
+    console.log(`Проверяем ответ для пользователя ${currentUser.id} в игре ${gameId}`);
+    const apiUrl = window.API_URL || '';
+    const response = await fetch(`${apiUrl}/api/games/${gameId}/check-answer?userId=${currentUser.id}`);
     
     if (!response.ok) {
+      console.error(`Ошибка при проверке ответа, статус: ${response.status}`);
       return false;
     }
     
     const data = await response.json();
+    console.log('Результат проверки ответа:', data);
     return data.hasAnswered;
   } catch (error) {
-    console.error('Ошибка при проверке ответа:', error);
+    console.error('Ошибка при проверке наличия ответа:', error);
     return false;
   }
 }

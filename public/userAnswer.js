@@ -61,7 +61,11 @@ async function submitAnswer() {
       submitBtn.textContent = 'Отправка...';
     }
     
-    const response = await fetch(`${API_URL}/games/${window.currentGame.id}/answer`, {
+    // Проверка наличия API_URL
+    const apiUrl = window.API_URL || '';
+    console.log(`Используемый API_URL: ${apiUrl}`);
+    
+    const response = await fetch(`${apiUrl}/api/games/${window.currentGame.id}/answer`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -70,7 +74,7 @@ async function submitAnswer() {
         userId: window.currentUser.id,
         answer: answer,
         username: window.currentUser.name,
-        anonymous: false // Анонимный режим отключен
+        anonymous: window.currentUser.anonymous || false // Учитываем анонимный режим
       })
     });
     
@@ -122,6 +126,11 @@ async function submitAnswer() {
       roomAnswersCount.textContent = result.answersCount;
     }
     
+    // Обновляем информацию о комнате
+    if (typeof window.updateRoomInfo === 'function') {
+      window.updateRoomInfo();
+    }
+    
   } catch (error) {
     console.error('Ошибка при отправке ответа:', error);
     showNotification(`Ошибка: ${error.message}`, 'error');
@@ -134,6 +143,23 @@ document.addEventListener('DOMContentLoaded', function() {
   if (submitAnswerBtn) {
     submitAnswerBtn.addEventListener('click', submitAnswer);
     console.log('Обработчик для кнопки отправки ответа добавлен');
+  } else {
+    console.warn('Кнопка submitAnswerBtn не найдена!');
+  }
+  
+  // Проверим и исправим обработчик кнопки ответа
+  const answerButton = document.getElementById('answerButton');
+  if (answerButton && !answerButton.hasAttribute('data-has-handler')) {
+    answerButton.addEventListener('click', function() {
+      console.log('Нажата кнопка "Ответить на вопрос"');
+      if (window.currentGame && window.currentGame.currentQuestion) {
+        showAnswerScreen(window.currentGame.currentQuestion);
+      } else {
+        showNotification('Ошибка: вопрос не найден', 'error');
+      }
+    });
+    answerButton.setAttribute('data-has-handler', 'true');
+    console.log('Обработчик для кнопки "Ответить на вопрос" добавлен');
   }
 });
 
@@ -162,7 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("Найдена кнопка backToMainFromAnswerBtn, добавляем обработчик");
         backToMainFromAnswerBtn.addEventListener('click', () => {
             console.log("Нажата кнопка возврата из экрана ответа");
-            showScreen('gameScreen');
+            showScreen('roomScreen');
         });
     } else {
         console.warn("Кнопка backToMainFromAnswerBtn не найдена!");
