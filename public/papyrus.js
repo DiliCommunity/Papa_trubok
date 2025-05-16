@@ -719,20 +719,13 @@ function initButtonHandlers() {
         submitQuestionBtn.disabled = true;
         submitQuestionBtn.textContent = 'Создание...';
         
-        // Отладочный вывод для диагностики
         const apiUrl = window.API_URL || '';
-        console.log('API_URL:', apiUrl);
-        
         const requestData = {
           question: question,
           userId: currentUser.id,
           userName: creatorName
         };
         
-        console.log('Отправляем запрос на создание игры...');
-        console.log('Данные запроса:', JSON.stringify(requestData));
-        
-        // Добавляем обработку ошибок сети и блокировку повторных нажатий
         try {
           const response = await fetch(`${apiUrl}/api/games`, {
             method: 'POST',
@@ -741,8 +734,6 @@ function initButtonHandlers() {
             },
             body: JSON.stringify(requestData)
           });
-          
-          console.log('Получен ответ от сервера:', response.status);
           
           if (!response.ok) {
             console.error(`Ошибка при создании игры, статус: ${response.status}`);
@@ -757,24 +748,13 @@ function initButtonHandlers() {
           // Очищаем поле ввода
           questionInput.value = '';
           
-          // Переходим в созданную игру
-          currentGame = {
-            id: game.gameId || game.id,
-            status: 'collecting_answers',
-            isCreator: true,
-            currentQuestion: question
-          };
-          
-          console.log('Данные игры для перехода:', currentGame);
-          
-          // Показываем уведомление о создании игры
-          showNotification('Игра успешно создана!', 'success');
-          
-          // Иногда сервер может возвращать id вместо gameId, проверяем оба варианта
+          // Сохраняем ID игры в localStorage
           const gameId = game.gameId || game.id;
           if (gameId) {
-            console.log('Переходим в игру с ID:', gameId);
-            joinGameRoom(gameId);
+            localStorage.setItem('papaTrubok_myGameId', gameId);
+            // Переходим на страницу своей игры
+            window.location.href = `game.html?id=${gameId}`;
+            return;
           } else {
             console.error('Не удалось получить ID созданной игры');
             showNotification('Не удалось получить ID игры. Попробуйте обновить список игр.', 'warning');
@@ -784,7 +764,6 @@ function initButtonHandlers() {
         } catch (error) {
           console.error('Ошибка при отправке запроса:', error);
           showNotification(`Не удалось создать игру: ${error.message}`, 'error');
-          // В случае ошибки сети, предлагаем тестовое создание игры
           if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
             showNotification('Проблема с сетью. Попробуйте позже или используйте тестовое создание игры.', 'warning');
           }
@@ -1348,6 +1327,41 @@ async function loadGames() {
     
     const games = await response.json();
     console.log('Получен список игр:', games);
+    
+    // Проверяем, есть ли у пользователя своя игра
+    const myGameId = localStorage.getItem('papaTrubok_myGameId');
+    let myGame = null;
+    if (myGameId) {
+      myGame = games.find(g => g.id === myGameId);
+    }
+    if (myGame) {
+      // Показываем только свою игру
+      let statusClass = 'status-waiting';
+      if (myGame.status === 'collecting_answers') statusClass = 'status-collecting';
+      else if (myGame.status === 'voting') statusClass = 'status-voting';
+      else if (myGame.status === 'results') statusClass = 'status-results';
+      const shortId = myGame.id.substring(0, 6);
+      const questionText = myGame.hasQuestion ? 'Вопрос уже загружен' : 'Ожидание вопроса...';
+      gamesList.innerHTML = `
+        <div class="game-item">
+          <div class="game-info">
+            <h3>Ваша игра #${shortId}</h3>
+            <p class="game-creator">Создатель: ${myGame.name || 'Вы'}</p>
+            <p class="game-question">${questionText}</p>
+            <div class="game-stats">
+              <span class="game-stat">Участники: ${myGame.count || 0}</span>
+              <span class="game-status ${statusClass}">${getStatusText(myGame.status)}</span>
+            </div>
+          </div>
+          <div class="game-actions">
+            <button class="papyrus-button shimmer join-game-btn" onclick="window.location.href='game.html?id=${myGame.id}'">
+              Перейти в свою комнату
+            </button>
+          </div>
+        </div>
+      `;
+      return;
+    }
     
     if (!games || games.length === 0) {
       gamesList.innerHTML = '<p class="no-games">Нет доступных игр. Создайте новую!</p>';

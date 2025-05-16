@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Папа Трубок — Моя игра</title>
+    <link rel="stylesheet" href="main.css">
+</head>
+<body>
+    <div class="container">
+        <div class="papyrus">
+            <div class="hieroglyph-border"></div>
+            <div class="torn-edge top-edge"></div>
+            <div class="torn-edge right-edge"></div>
+            <div class="torn-edge bottom-edge"></div>
+            <div class="torn-edge left-edge"></div>
+            <div class="worn-spot spot1"></div>
+            <div class="worn-spot spot2"></div>
+            <div class="worn-spot spot3"></div>
+            <div class="scarab top-left">𓆣</div>
+            <div class="scarab top-right">𓆣</div>
+            <div class="scarab bottom-left">𓆣</div>
+            <div class="scarab bottom-right">𓆣</div>
+
+            <div id="gameMain" style="display: block;">
+                <div class="title">
+                    <h1>Ваша комната</h1>
+                </div>
+                <div class="game-room" id="gameRoom">
+                    <div class="game-room-header">
+                        <h2 class="game-room-title" id="gameRoomTitle">Комната</h2>
+                        <span class="game-room-status" id="gameRoomStatus">Ожидание</span>
+                    </div>
+                    <div class="question-box">
+                        <h3>Вопрос:</h3>
+                        <p class="question-text" id="gameQuestionText">—</p>
+                    </div>
+                    <div class="game-room-info">
+                        <div class="game-room-players">
+                            <span class="game-room-player" id="gameRoomPlayers">Игроков: 0/10</span>
+                            <span class="game-room-player" id="gameRoomAnswers">Ответов: 0</span>
+                        </div>
+                    </div>
+                    <div id="gameActions"></div>
+                </div>
+                <div id="userAnswerDisplay" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+    <script src="game.js"></script>
+    <script src="userAnswer.js"></script>
+    <script src="auth.js"></script>
+</body>
+</html> 
