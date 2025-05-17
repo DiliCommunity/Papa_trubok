@@ -7,6 +7,10 @@ let keyboardVisible = false; // Флаг для отслеживания вид�
 let currentUser = null;
 let currentGame = null;
 
+// Глобальные переменные для блокировки закрытия
+let preventUnload = true;
+let unloadTimer = null;
+
 console.log("papyrus.js загружен");
 
 // Функция тестирования соединения с сервером
@@ -2402,3 +2406,84 @@ function restoreGameState() {
         joinGameRoom(savedGameId);
     }
 }
+
+// Функция для полной блокировки закрытия страницы
+function blockPageUnload() {
+    console.log('Активирована блокировка закрытия страницы');
+    
+    // Блокируем все стандартные события закрытия
+    window.onbeforeunload = function(e) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+    };
+
+    // Блокируем аппаратную кнопку "Назад"
+    window.history.pushState(null, null, window.location.href);
+    window.onpopstate = function() {
+        window.history.pushState(null, null, window.location.href);
+    };
+
+    // Перехватываем все события закрытия
+    window.addEventListener('beforeunload', function(e) {
+        if (preventUnload) {
+            e.preventDefault();
+            e.returnValue = '';
+            return '';
+        }
+    }, { capture: true });
+
+    // Дополнительная блокировка для мобильных устройств
+    document.addEventListener('backbutton', function(e) {
+        e.preventDefault();
+        return false;
+    }, false);
+}
+
+// Функция для безопасного перехода
+function safePageTransition(url) {
+    console.log(`Безопасный переход на страницу: ${url}`);
+    
+    // Временно разрешаем переход
+    preventUnload = false;
+    
+    // Сохраняем состояние игры
+    if (currentGame && currentGame.id) {
+        localStorage.setItem('papaTrubok_lastGameId', currentGame.id);
+    }
+    
+    // Переход на новую страницу
+    window.location.href = url;
+}
+
+// Модифицируем существующие функции
+function joinGameRoom(gameId) {
+    if (!gameId) return;
+    safePageTransition(`game.html?id=${gameId}`);
+}
+
+// Инициализируем блокировку при загрузке
+document.addEventListener('DOMContentLoaded', function() {
+    blockPageUnload();
+    
+    // Восстанавливаем состояние игры
+    const savedGameId = localStorage.getItem('papaTrubok_lastGameId');
+    if (savedGameId) {
+        console.log(`Найден сохраненный ID игры: ${savedGameId}`);
+        joinGameRoom(savedGameId);
+    }
+});
+
+// Перехватываем все попытки закрытия
+window.addEventListener('unload', function(e) {
+    if (preventUnload) {
+        e.preventDefault();
+        return '';
+    }
+}, { capture: true });
+
+// Блокируем контекстное меню закрытия
+document.oncontextmenu = function(e) {
+    e.preventDefault();
+    return false;
+};

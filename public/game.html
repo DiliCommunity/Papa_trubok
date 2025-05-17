@@ -51,22 +51,64 @@
     <script src="userAnswer.js"></script>
     <script src="auth.js"></script>
     <script>
-        // Предотвращаем случайный выход
-        window.addEventListener('beforeunload', function(e) {
-            // Проверяем, есть ли активная игра
+        // Глобальные переменные для блокировки закрытия
+        let preventUnload = true;
+
+        // Функция для полной блокировки закрытия страницы
+        function blockPageUnload() {
+            console.log('Активирована блокировка закрытия страницы');
+            
+            // Блокируем все стандартные события закрытия
+            window.onbeforeunload = function(e) {
+                e.preventDefault();
+                e.returnValue = '';
+                return '';
+            };
+
+            // Блокируем аппаратную кнопку "Назад"
+            window.history.pushState(null, null, window.location.href);
+            window.onpopstate = function() {
+                window.history.pushState(null, null, window.location.href);
+            };
+
+            // Перехватываем все события закрытия
+            window.addEventListener('beforeunload', function(e) {
+                if (preventUnload) {
+                    e.preventDefault();
+                    e.returnValue = '';
+                    return '';
+                }
+            }, { capture: true });
+
+            // Дополнительная блокировка для мобильных устройств
+            document.addEventListener('backbutton', function(e) {
+                e.preventDefault();
+                return false;
+            }, false);
+        }
+
+        // Функция для безопасного перехода
+        function safePageTransition(url) {
+            console.log(`Безопасный переход на страницу: ${url}`);
+            
+            // Временно разрешаем переход
+            preventUnload = false;
+            
+            // Сохраняем ID игры
             const gameId = new URLSearchParams(window.location.search).get('id');
             if (gameId) {
-                // Сохраняем ID игры перед уходом
                 localStorage.setItem('papaTrubok_lastGameId', gameId);
             }
             
-            // Отменяем стандартное поведение
-            e.preventDefault();
-            e.returnValue = '';
-        });
+            // Переход на новую страницу
+            window.location.href = url;
+        }
 
-        // При загрузке страницы проверяем, есть ли сохраненный ID игры
+        // Инициализируем блокировку при загрузке
         document.addEventListener('DOMContentLoaded', function() {
+            blockPageUnload();
+            
+            // Проверяем сохраненный ID игры
             const savedGameId = localStorage.getItem('papaTrubok_lastGameId');
             const currentGameId = new URLSearchParams(window.location.search).get('id');
             
@@ -76,6 +118,20 @@
                 location.reload();
             }
         });
+
+        // Перехватываем все попытки закрытия
+        window.addEventListener('unload', function(e) {
+            if (preventUnload) {
+                e.preventDefault();
+                return '';
+            }
+        }, { capture: true });
+
+        // Блокируем контекстное меню закрытия
+        document.oncontextmenu = function(e) {
+            e.preventDefault();
+            return false;
+        };
     </script>
 </body>
 </html> 
