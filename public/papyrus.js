@@ -504,11 +504,6 @@ document.addEventListener('DOMContentLoaded', function() {
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
     
-    // Если доступен, включаем подтверждение закрытия
-    if (typeof window.Telegram.WebApp.enableClosingConfirmation === 'function') {
-      window.Telegram.WebApp.enableClosingConfirmation();
-    }
-    
     // Устанавливаем обработчик кнопки "Назад" Telegram
     if (window.Telegram.WebApp.BackButton) {
       window.Telegram.WebApp.BackButton.onClick(function() {
