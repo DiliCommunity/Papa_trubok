@@ -4,26 +4,6 @@ let API_URL = window.API_URL || '/api';
 let currentUser = window.currentUser || null;
 let currentGame = null;
 
-// Восстановление пользователя из localStorage, если не найден
-if (!currentUser) {
-    try {
-        const authData = localStorage.getItem('papaTrubokAuth');
-        if (authData) {
-            const parsed = JSON.parse(authData);
-            if (parsed && parsed.userId) {
-                currentUser = {
-                    id: parsed.userId,
-                    name: parsed.name || '',
-                    anonymous: parsed.anonymous || false
-                };
-                window.currentUser = currentUser;
-            }
-        }
-    } catch (e) {
-        // ничего не делаем
-    }
-}
-
 // Получаем ID игры из query-параметра или localStorage
 function getGameId() {
     const params = new URLSearchParams(window.location.search);
@@ -36,11 +16,6 @@ function getGameId() {
 
 // Загрузка своей игры
 async function loadMyGame() {
-    // Если нет пользователя — только тогда сбрасываем на старт
-    if (!currentUser || !currentUser.id) {
-        window.location.href = 'papyrus.html';
-        return;
-    }
     const gameId = getGameId();
     if (!gameId) {
         showNotification('Игра не найдена', 'error');

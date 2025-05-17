@@ -64,11 +64,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Для отладки создаем тестового пользователя
         // В реальной версии это должен быть идентификатор сессии или другой механизм
         const randomId = 'user_' + Math.floor(Math.random() * 1000000);
-        currentUser = {
+                currentUser = {
             id: randomId,
             name: 'Гость_' + randomId.substr(-4),
-            anonymous: false
-        };
+                    anonymous: false
+                };
         
         console.log('Создан временный пользователь:', currentUser);
     }
@@ -1700,7 +1700,7 @@ async function loadVotingOptions(gameId) {
   if (!currentUser || !currentUser.id) {
     console.error('Нет данных о пользователе для загрузки вариантов голосования');
     showNotification('Ошибка: Данные пользователя не найдены', 'error');
-    return;
+      return;
   }
   
   try {
@@ -1743,24 +1743,24 @@ async function loadVotingOptions(gameId) {
           if (answer.userId === currentUser.id) return;
           
           // Создаем элемент для варианта
-          const option = document.createElement('div');
-          option.className = 'answer-option';
+        const option = document.createElement('div');
+        option.className = 'answer-option';
           option.dataset.answerId = answer.id;
           
           // Заполняем содержимое варианта
-          option.innerHTML = `
+        option.innerHTML = `
             <p class="answer-text">${answer.text}</p>
             <span class="answer-author">${answer.anonymous ? 'Анонимный игрок' : answer.userName}</span>
-          `;
+        `;
           
           // Добавляем обработчик клика для выбора варианта
           option.addEventListener('click', function() {
-            toggleVoteSelection(this);
+          toggleVoteSelection(this);
           });
           
           // Добавляем вариант в контейнер
-          answerOptions.appendChild(option);
-        });
+        answerOptions.appendChild(option);
+      });
       }
     }
     
@@ -1907,7 +1907,7 @@ async function loadResults(gameId) {
   if (!gameId) {
     console.error('Не указан ID игры для загрузки результатов');
     showNotification('Ошибка: Не указан ID игры', 'error');
-    return;
+      return;
   }
   
   try {
@@ -1935,8 +1935,8 @@ async function loadResults(gameId) {
     }
     
     if (resultsList) {
-      resultsList.innerHTML = '';
-      
+    resultsList.innerHTML = '';
+    
       if (!data.results || data.results.length === 0) {
         resultsList.innerHTML = '<p>Результаты еще не доступны</p>';
       } else {
@@ -1945,7 +1945,7 @@ async function loadResults(gameId) {
         
         // Отображаем результаты
         sortedResults.forEach((result, index) => {
-          const resultItem = document.createElement('div');
+      const resultItem = document.createElement('div');
           resultItem.className = `result-item ${index === 0 ? 'winner' : ''}`;
           
           // Определяем медаль для призовых мест
@@ -1956,19 +1956,19 @@ async function loadResults(gameId) {
           
           // Выделяем свой ответ
           const isOwn = result.userId === currentUser.id;
-          
-          resultItem.innerHTML = `
+      
+      resultItem.innerHTML = `
             <div class="result-header">
               <div class="result-place">${medal} ${index + 1}</div>
               <div class="result-name ${isOwn ? 'own-result' : ''}">${result.anonymous ? 'Анонимный игрок' : result.userName} ${isOwn ? '(ваш ответ)' : ''}</div>
               <div class="result-votes">${result.votes} ${result.votes === 1 ? 'голос' : result.votes < 5 ? 'голоса' : 'голосов'}</div>
             </div>
             <div class="result-answer">${result.answer}</div>
-          `;
-          
-          resultsList.appendChild(resultItem);
-        });
-        
+      `;
+      
+      resultsList.appendChild(resultItem);
+    });
+    
         // Добавляем кнопку возврата
         const backButton = document.createElement('button');
         backButton.className = 'papyrus-button shimmer';
@@ -2337,4 +2337,68 @@ function formatTelegramName(user) {
   }
   
   return name;
+}
+
+// Добавляем функцию для безопасного перехода между страницами
+function safePageTransition(url) {
+    console.log(`Безопасный переход на страницу: ${url}`);
+    
+    // Сохраняем текущее состояние, если это необходимо
+    if (currentGame && currentGame.id) {
+        localStorage.setItem('papaTrubok_lastGameId', currentGame.id);
+    }
+    
+    // Переход на новую страницу
+    window.location.href = url;
+}
+
+// Модифицируем функцию joinGameRoom
+function joinGameRoom(gameId) {
+    if (!gameId) return;
+    
+    // Используем безопасный переход
+    safePageTransition(`game.html?id=${gameId}`);
+}
+
+// Улучшаем обработку истории браузера
+window.addEventListener('popstate', function(e) {
+    e.preventDefault();
+    
+    // Проверяем, есть ли сохраненный ID игры
+    const savedGameId = localStorage.getItem('papaTrubok_lastGameId');
+    
+    if (savedGameId) {
+        // Если есть сохраненный ID, переходим к нему
+        window.location.href = `game.html?id=${savedGameId}`;
+    } else {
+        // Стандартная логика возврата
+        goBack();
+    }
+    
+    // Добавляем новое состояние, чтобы предотвратить выход
+    window.history.pushState({page: Date.now()}, "Папа Трубок", window.location.href);
+    
+    return false;
+});
+
+// Улучшаем обработку beforeunload
+window.addEventListener('beforeunload', function(e) {
+    // Сохраняем состояние игры перед уходом
+    if (currentGame && currentGame.id) {
+        localStorage.setItem('papaTrubok_lastGameId', currentGame.id);
+    }
+    
+    // Отменяем стандартное поведение
+    e.preventDefault();
+    e.returnValue = '';
+});
+
+// Добавляем функцию для восстановления состояния игры
+function restoreGameState() {
+    const savedGameId = localStorage.getItem('papaTrubok_lastGameId');
+    
+    if (savedGameId) {
+        console.log(`Восстановление состояния игры: ${savedGameId}`);
+        joinGameRoom(savedGameId);
+    }
 }

@@ -50,5 +50,32 @@
     <script src="game.js"></script>
     <script src="userAnswer.js"></script>
     <script src="auth.js"></script>
+    <script>
+        // Предотвращаем случайный выход
+        window.addEventListener('beforeunload', function(e) {
+            // Проверяем, есть ли активная игра
+            const gameId = new URLSearchParams(window.location.search).get('id');
+            if (gameId) {
+                // Сохраняем ID игры перед уходом
+                localStorage.setItem('papaTrubok_lastGameId', gameId);
+            }
+            
+            // Отменяем стандартное поведение
+            e.preventDefault();
+            e.returnValue = '';
+        });
+
+        // При загрузке страницы проверяем, есть ли сохраненный ID игры
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedGameId = localStorage.getItem('papaTrubok_lastGameId');
+            const currentGameId = new URLSearchParams(window.location.search).get('id');
+            
+            if (savedGameId && savedGameId !== currentGameId) {
+                // Если сохраненный ID отличается, обновляем URL
+                window.history.replaceState(null, '', `game.html?id=${savedGameId}`);
+                location.reload();
+            }
+        });
+    </script>
 </body>
 </html> 
