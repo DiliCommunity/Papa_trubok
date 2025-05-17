@@ -6,6 +6,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>Папа Трубок</title>
     <link rel="stylesheet" href="main.css">
+    <link rel="stylesheet" href="styles.css">
     <!-- Скрипт для диагностики и отлова ошибок JavaScript -->
     <script type="text/javascript">
       window.onerror = function(message, source, lineno, colno, error) {
@@ -28,6 +29,10 @@
       };
     </script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Предотвращаем кэширование -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
 </head>
 <body>
     <div class="container">
@@ -251,11 +256,106 @@
         </div>
     </div>
 
+    <!-- IndexedDB Storage -->
+    <script src="indexedDB.js"></script>
     <!-- Основной скрипт приложения -->
     <script src="papyrus.js"></script>
     <!-- Пользовательские функции -->
     <script src="userAnswer.js"></script>
     <!-- Функции аутентификации -->
     <script src="auth.js"></script>
+    <script>
+        // Глобальные переменные для предотвращения выхода
+        window.preventUnload = true;
+        window.navigationHistory = [];
+
+        // Функция безопасного перехода
+        function safePageTransition(url, options = {}) {
+            const {
+                saveHistory = true,
+                clearPreviousState = false,
+                additionalData = null
+            } = options;
+
+            console.log(`Безопасный переход: ${url}`);
+            
+            // Сохраняем текущее состояние игры
+            if (window.currentGame && window.currentGame.id) {
+                saveGameStateToIndexedDB(window.currentGame.id, window.currentGame);
+            }
+
+            // Сохраняем пользовательские данные
+            if (window.currentUser && window.currentUser.id) {
+                saveUserToIndexedDB(window.currentUser);
+            }
+
+            // Сохраняем дополнительные данные
+            if (additionalData) {
+                saveAppStateToIndexedDB('transitionData', additionalData);
+            }
+
+            // Очищаем предыдущее состояние, если требуется
+            if (clearPreviousState) {
+                localStorage.clear();
+            }
+
+            // Сохраняем маршрут
+            if (saveHistory) {
+                window.navigationHistory.push(url);
+                saveLastRoute(url);
+            }
+
+            // Разрешаем выход
+            window.preventUnload = false;
+
+            // Переход на новую страницу
+            window.location.href = url;
+        }
+
+        // Функция возврата назад
+        function goBack() {
+            if (window.navigationHistory.length > 1) {
+                window.navigationHistory.pop();
+                const previousPage = window.navigationHistory[window.navigationHistory.length - 1];
+                safePageTransition(previousPage, { saveHistory: false });
+            } else {
+                safePageTransition('index.html');
+            }
+        }
+
+        // Блокировка случайного выхода
+        window.addEventListener('beforeunload', function(e) {
+            if (window.preventUnload) {
+                e.preventDefault();
+                e.returnValue = '';
+                return '';
+            }
+        });
+
+        // Восстановление состояния при загрузке
+        document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                // Восстанавливаем последний маршрут
+                const lastRoute = await getLastRoute();
+                if (lastRoute && lastRoute !== window.location.href) {
+                    console.log(`Восстановление последнего маршрута: ${lastRoute}`);
+                    safePageTransition(lastRoute, { saveHistory: false });
+                    return;
+                }
+
+                // Восстанавливаем состояние игры
+                const savedGameId = localStorage.getItem('papaTrubok_lastGameId');
+                if (savedGameId) {
+                    const gameData = await getGameStateFromIndexedDB(savedGameId);
+                    if (gameData) {
+                        window.currentGame = gameData;
+                        console.log('Состояние игры восстановлено');
+                    }
+                }
+            } catch (error) {
+                console.error('Ошибка восстановления состояния:', error);
+            }
+        });
+    </script>
 </body>
 </html> 

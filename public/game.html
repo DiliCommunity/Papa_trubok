@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Папа Трубок — Моя игра</title>
     <link rel="stylesheet" href="main.css">
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- Предотвращаем кэширование -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
 </head>
 <body>
     <div class="container">
@@ -47,91 +53,102 @@
             </div>
         </div>
     </div>
-    <script src="game.js"></script>
-    <script src="userAnswer.js"></script>
-    <script src="auth.js"></script>
+    <script src="indexedDB.js"></script>
     <script>
-        // Глобальные переменные для блокировки закрытия
-        let preventUnload = true;
+        // Глобальные переменные для предотвращения выхода
+        window.preventUnload = true;
+        window.navigationHistory = [];
 
-        // Функция для полной блокировки закрытия страницы
-        function blockPageUnload() {
-            console.log('Активирована блокировка закрытия страницы');
+        // Функция безопасного перехода
+        function safePageTransition(url, options = {}) {
+            const {
+                saveHistory = true,
+                clearPreviousState = false,
+                additionalData = null
+            } = options;
+
+            console.log(`Безопасный переход: ${url}`);
             
-            // Блокируем все стандартные события закрытия
-            window.onbeforeunload = function(e) {
-                e.preventDefault();
-                e.returnValue = '';
-                return '';
-            };
-
-            // Блокируем аппаратную кнопку "Назад"
-            window.history.pushState(null, null, window.location.href);
-            window.onpopstate = function() {
-                window.history.pushState(null, null, window.location.href);
-            };
-
-            // Перехватываем все события закрытия
-            window.addEventListener('beforeunload', function(e) {
-                if (preventUnload) {
-                    e.preventDefault();
-                    e.returnValue = '';
-                    return '';
-                }
-            }, { capture: true });
-
-            // Дополнительная блокировка для мобильных устройств
-            document.addEventListener('backbutton', function(e) {
-                e.preventDefault();
-                return false;
-            }, false);
-        }
-
-        // Функция для безопасного перехода
-        function safePageTransition(url) {
-            console.log(`Безопасный переход на страницу: ${url}`);
-            
-            // Временно разрешаем переход
-            preventUnload = false;
-            
-            // Сохраняем ID игры
-            const gameId = new URLSearchParams(window.location.search).get('id');
-            if (gameId) {
-                localStorage.setItem('papaTrubok_lastGameId', gameId);
+            // Сохраняем текущее состояние игры
+            if (window.currentGame && window.currentGame.id) {
+                saveGameStateToIndexedDB(window.currentGame.id, window.currentGame);
             }
-            
+
+            // Сохраняем пользовательские данные
+            if (window.currentUser && window.currentUser.id) {
+                saveUserToIndexedDB(window.currentUser);
+            }
+
+            // Сохраняем дополнительные данные
+            if (additionalData) {
+                saveAppStateToIndexedDB('transitionData', additionalData);
+            }
+
+            // Очищаем предыдущее состояние, если требуется
+            if (clearPreviousState) {
+                localStorage.clear();
+            }
+
+            // Сохраняем маршрут
+            if (saveHistory) {
+                window.navigationHistory.push(url);
+                saveLastRoute(url);
+            }
+
+            // Разрешаем выход
+            window.preventUnload = false;
+
             // Переход на новую страницу
             window.location.href = url;
         }
 
-        // Инициализируем блокировку при загрузке
-        document.addEventListener('DOMContentLoaded', function() {
-            blockPageUnload();
-            
-            // Проверяем сохраненный ID игры
-            const savedGameId = localStorage.getItem('papaTrubok_lastGameId');
-            const currentGameId = new URLSearchParams(window.location.search).get('id');
-            
-            if (savedGameId && savedGameId !== currentGameId) {
-                // Если сохраненный ID отличается, обновляем URL
-                window.history.replaceState(null, '', `game.html?id=${savedGameId}`);
-                location.reload();
+        // Функция возврата назад
+        function goBack() {
+            if (window.navigationHistory.length > 1) {
+                window.navigationHistory.pop();
+                const previousPage = window.navigationHistory[window.navigationHistory.length - 1];
+                safePageTransition(previousPage, { saveHistory: false });
+            } else {
+                safePageTransition('papyrus.html');
+            }
+        }
+
+        // Блокировка случайного выхода
+        window.addEventListener('beforeunload', function(e) {
+            if (window.preventUnload) {
+                e.preventDefault();
+                e.returnValue = '';
+                return '';
             }
         });
 
-        // Перехватываем все попытки закрытия
-        window.addEventListener('unload', function(e) {
-            if (preventUnload) {
-                e.preventDefault();
-                return '';
-            }
-        }, { capture: true });
+        // Восстановление состояния при загрузке
+        document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                // Восстанавливаем последний маршрут
+                const lastRoute = await getLastRoute();
+                if (lastRoute && lastRoute !== window.location.href) {
+                    console.log(`Восстановление последнего маршрута: ${lastRoute}`);
+                    safePageTransition(lastRoute, { saveHistory: false });
+                    return;
+                }
 
-        // Блокируем контекстное меню закрытия
-        document.oncontextmenu = function(e) {
-            e.preventDefault();
-            return false;
-        };
+                // Восстанавливаем состояние игры
+                const savedGameId = localStorage.getItem('papaTrubok_lastGameId');
+                if (savedGameId) {
+                    const gameData = await getGameStateFromIndexedDB(savedGameId);
+                    if (gameData) {
+                        window.currentGame = gameData;
+                        console.log('Состояние игры восстановлено');
+                    }
+                }
+            } catch (error) {
+                console.error('Ошибка восстановления состояния:', error);
+            }
+        });
     </script>
+    <script src="game.js"></script>
+    <script src="userAnswer.js"></script>
+    <script src="auth.js"></script>
 </body>
 </html> 

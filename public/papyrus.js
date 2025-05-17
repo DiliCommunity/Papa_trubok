@@ -2487,3 +2487,212 @@ document.oncontextmenu = function(e) {
     e.preventDefault();
     return false;
 };
+
+// Модифицируем функции сохранения состояния
+
+// Сохранение текущего пользователя
+async function saveCurrentUser() {
+    if (currentUser && currentUser.id) {
+        try {
+            await saveUserToIndexedDB(currentUser);
+            console.log('Текущий пользователь сохранен в IndexedDB');
+        } catch (error) {
+            console.error('Ошибка сохранения пользователя:', error);
+        }
+    }
+}
+
+// Восстановление пользователя
+async function restoreCurrentUser() {
+    try {
+        // Пытаемся восстановить пользователя из IndexedDB
+        const savedUser = await getUserFromIndexedDB(currentUser.id);
+        if (savedUser) {
+            currentUser = savedUser;
+            console.log('Пользователь восстановлен из IndexedDB');
+            return true;
+        }
+    } catch (error) {
+        console.error('Ошибка восстановления пользователя:', error);
+    }
+    return false;
+}
+
+// Сохранение состояния игры
+async function saveGameStateToStorage() {
+    if (currentGame && currentGame.id) {
+        try {
+            await saveGameStateToIndexedDB(currentGame.id, currentGame);
+            console.log('Состояние игры сохранено в IndexedDB');
+        } catch (error) {
+            console.error('Ошибка сохранения состояния игры:', error);
+        }
+    }
+}
+
+// Восстановление состояния игры
+async function restoreGameStateFromStorage() {
+    try {
+        const savedGameId = localStorage.getItem('papaTrubok_lastGameId');
+        if (savedGameId) {
+            const gameData = await getGameStateFromIndexedDB(savedGameId);
+            if (gameData) {
+                currentGame = gameData;
+                console.log('Состояние игры восстановлено из IndexedDB');
+                return true;
+            }
+        }
+    } catch (error) {
+        console.error('Ошибка восстановления состояния игры:', error);
+    }
+    return false;
+}
+
+// Сохранение состояния приложения
+async function saveAppStateToStorage(key, value) {
+    try {
+        await saveAppStateToIndexedDB(key, value);
+        console.log(`Состояние приложения для ключа "${key}" сохранено`);
+    } catch (error) {
+        console.error(`Ошибка сохранения состояния приложения для ключа "${key}":`, error);
+    }
+}
+
+// Восстановление состояния приложения
+async function restoreAppStateFromStorage(key) {
+    try {
+        const value = await getAppStateFromIndexedDB(key);
+        if (value !== null) {
+            console.log(`Состояние приложения для ключа "${key}" восстановлено`);
+            return value;
+        }
+    } catch (error) {
+        console.error(`Ошибка восстановления состояния приложения для ключа "${key}":`, error);
+    }
+    return null;
+}
+
+// Модифицируем существующие обработчики событий для использования IndexedDB
+
+// При создании игры
+async function createGame() {
+    // Существующая логика создания игры
+    // ...
+
+    // После создания игры сохраняем состояние
+    await saveGameStateToStorage();
+}
+
+// При входе в игру
+async function joinGameRoom(gameId) {
+    // Существующая логика входа в игру
+    // ...
+
+    // Сохраняем состояние игры
+    await saveGameStateToStorage();
+}
+
+// При загрузке страницы
+document.addEventListener('DOMContentLoaded', async function() {
+    // Блокируем возможность случайного выхода
+    window.addEventListener('beforeunload', function(e) {
+        if (window.preventUnload) {
+            e.preventDefault();
+            e.returnValue = '';
+            return '';
+        }
+    });
+
+    // Восстанавливаем состояние приложения
+    await restoreApplicationState();
+
+    // Пытаемся восстановить состояние пользователя
+    await restoreCurrentUser();
+
+    // Пытаемся восстановить состояние игры
+    await restoreGameStateFromStorage();
+
+    // Продолжаем стандартную инициализацию
+    initializeApplication();
+    setupEventListeners();
+    loadInitialContent();
+});
+
+// Глобальные переменные для навигации и предотвращения выхода
+window.preventUnload = true;
+window.navigationHistory = [];
+
+// Улучшенная функция безопасного перехода
+function safePageTransition(url, options = {}) {
+    const {
+        saveHistory = true,
+        clearPreviousState = false,
+        additionalData = null
+    } = options;
+
+    console.log(`Безопасный переход: ${url}`);
+    
+    // Сохраняем текущее состояние игры
+    if (currentGame && currentGame.id) {
+        saveGameStateToIndexedDB(currentGame.id, currentGame);
+    }
+
+    // Сохраняем пользовательские данные
+    if (currentUser && currentUser.id) {
+        saveUserToIndexedDB(currentUser);
+    }
+
+    // Сохраняем дополнительные данные
+    if (additionalData) {
+        saveAppStateToIndexedDB('transitionData', additionalData);
+    }
+
+    // Очищаем предыдущее состояние, если требуется
+    if (clearPreviousState) {
+        localStorage.clear();
+    }
+
+    // Сохраняем маршрут
+    if (saveHistory) {
+        window.navigationHistory.push(url);
+    }
+}
+
+// Заглушка для восстановления состояния приложения
+async function restoreApplicationState() {
+    console.log('Восстановление состояния приложения');
+    try {
+        // Здесь можно добавить логику восстановления состояния
+        // Например, восстановление из localStorage или IndexedDB
+        const savedState = localStorage.getItem('papaTrubok_appState');
+        if (savedState) {
+            const parsedState = JSON.parse(savedState);
+            // Применяем сохраненное состояние
+            console.log('Восстановлено состояние приложения:', parsedState);
+        }
+    } catch (error) {
+        console.error('Ошибка при восстановлении состояния приложения:', error);
+    }
+}
+
+// Заглушка для инициализации приложения
+function initializeApplication() {
+    console.log('Инициализация приложения');
+    // Здесь можно добавить начальную настройку приложения
+    // Например, установка начальных параметров, загрузка конфигурации
+}
+
+// Заглушка для настройки обработчиков событий
+function setupEventListeners() {
+    console.log('Настройка обработчиков событий');
+    // Здесь можно добавить глобальные обработчики событий
+    // Например, обработка клавиш, resize, online/offline и т.д.
+}
+
+// Заглушка для загрузки начального контента
+function loadInitialContent() {
+    console.log('Загрузка начального контента');
+    // Здесь можно добавить логику первоначальной загрузки данных
+    // Например, загрузка списка игр, проверка авторизации и т.д.
+    loadGames(); // Используем существующую функцию
+}
